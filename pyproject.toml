@@ -64,6 +64,9 @@ Security = "https://github.com/crastatelvin/nightjar/security/policy"
 [tool.hatch.build.targets.wheel]
 packages = ["src/nightjar"]
 
+[tool.hatch.build.targets.wheel.force-include]
+"evals/scenarios" = "nightjar/evals/scenarios"
+
 [tool.ruff]
 line-length = 100
 target-version = "py314"
