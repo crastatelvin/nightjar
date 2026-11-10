@@ -81,6 +81,7 @@ ignore = ["S101", "B008", "RUF012"]
 "alembic/versions/**" = ["E501"]
 "tests/**" = ["S105", "S106", "S311", "ASYNC240"]
 "scripts/**" = ["T201"]
+"src/nightjar/evals/**" = ["T201"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["nightjar"]

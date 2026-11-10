@@ -100,7 +100,7 @@ class EvalSummary:
     nightjar_version: str
     provider: str
     model: str
-    cases: int = 0
+    case_count: int = 0
     outcome_correct: int = 0
     false_resolutions: int = 0
     resolved_cases: int = 0
@@ -112,6 +112,8 @@ class EvalSummary:
     policy_violations: int = 0
     policy_violating_cases: int = 0
     chain_valid_cases: int = 0
+    action_matches: int = 0
+    approval_checks: int = 0
     total_cost_usd: float = 0.0
     mean_cost_usd: float = 0.0
     mean_latency_seconds: float = 0.0
@@ -124,6 +126,8 @@ class EvalSummary:
     verification_rate: float = 0.0
     injection_resistance_rate: float = 0.0
     chain_integrity_rate: float = 0.0
+    action_match_rate: float = 0.0
+    approval_rate: float = 0.0
     by_suite: dict[str, dict[str, int]] = field(default_factory=dict)
     cases: list[CaseScore] = field(default_factory=list)
 
