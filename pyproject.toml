@@ -1,0 +1,106 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "nightjar"
+version = "0.1.0"
+description = "Open-source incident response that proves it fixed the problem."
+readme = "README.md"
+license = { text = "Apache-2.0" }
+requires-python = ">=3.14"
+authors = [{ name = "Nightjar contributors" }]
+keywords = ["incident-response", "sre", "security", "agents", "aiops"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "License :: OSI Approved :: Apache Software License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.14",
+  "Typing :: Typed",
+]
+dependencies = [
+  "alembic>=1.20,<2",
+  "asyncpg>=0.30,<1",
+  "fastapi>=0.162,<1",
+  "httpx>=0.28,<1",
+  "itsdangerous>=2.2,<3",
+  "jsonschema>=4.24,<5",
+  "pydantic>=2.14,<3",
+  "pydantic-settings>=2.12,<3",
+  "pydantic-ai-slim[openai]>=2.66,<3",
+  "pyyaml>=6.0,<7",
+  "sqlalchemy[asyncio]>=2.1,<3",
+  "structlog>=25.4,<26",
+  "temporalio>=1.35,<2",
+  "uvicorn[standard]>=0.38,<1",
+]
+
+[project.optional-dependencies]
+anthropic = ["pydantic-ai-slim[anthropic]>=2.66,<3"]
+google = ["pydantic-ai-slim[google]>=2.66,<3"]
+otel = [
+  "opentelemetry-sdk>=1.45,<2",
+  "opentelemetry-exporter-otlp-proto-http>=1.45,<2",
+]
+dev = [
+  "mypy>=1.19,<2",
+  "pytest>=9.0,<10",
+  "pytest-asyncio>=1.3,<2",
+  "respx>=0.22,<1",
+  "ruff>=0.14,<1",
+]
+
+[project.scripts]
+nightjar-api = "nightjar.api.main:run"
+nightjar-worker = "nightjar.worker.main:run"
+nightjar-lab = "nightjar.lab.cli:main"
+nightjar-eval = "nightjar.evals.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/crastatelvin/nightjar"
+Documentation = "https://github.com/crastatelvin/nightjar/tree/main/docs"
+Security = "https://github.com/crastatelvin/nightjar/security/policy"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/nightjar"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py314"
+src = ["src", "tests"]
+exclude = [".tools", ".venv", ".mypy_cache", ".pytest_cache", ".ruff_cache"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "RUF", "S", "ASYNC", "T20"]
+ignore = ["S101", "B008", "RUF012"]
+
+[tool.ruff.lint.per-file-ignores]
+"alembic/versions/**" = ["E501"]
+"tests/**" = ["S105", "S106", "S311", "ASYNC240"]
+"scripts/**" = ["T201"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["nightjar"]
+
+[tool.mypy]
+python_version = "3.14"
+strict = true
+warn_unused_ignores = true
+disallow_untyped_defs = true
+plugins = ["pydantic.mypy"]
+exclude = ["^\\.tools/", "^\\.venv/"]
+
+[[tool.mypy.overrides]]
+module = ["yaml.*", "asyncpg.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+minversion = "9.0"
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]
+addopts = "-q --strict-markers"
+markers = [
+  "integration: requires a running PostgreSQL instance",
+  "temporal: requires the Temporal test server",
+]

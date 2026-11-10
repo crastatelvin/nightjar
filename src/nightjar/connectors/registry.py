@@ -1,0 +1,97 @@
+from __future__ import annotations
+
+from typing import Any
+
+from nightjar.api.settings import Settings
+from nightjar.connectors.base import CheckFn, Connector, ConnectorError, ToolResult
+from nightjar.connectors.cloudflare import CloudflareConnector
+from nightjar.connectors.github import GitHubConnector
+from nightjar.connectors.http import HttpConnector
+from nightjar.connectors.lab import LabConnector
+from nightjar.connectors.webhook import WebhookConnector
+from nightjar.core.actions import validate_action
+from nightjar.core.models import ActionSpec
+
+
+class ConnectorRegistry:
+    """Maps typed actions and read tools to exactly one connector.
+
+    Ambiguity is an error, not a guess. A plan can always disambiguate with
+    ``params.connector``, which policy treats as part of the action specification.
+    """
+
+    def __init__(self, connectors: list[Connector]) -> None:
+        self._connectors = connectors
+        self._tools: dict[str, Connector] = {}
+        self._checks: dict[str, CheckFn] = {}
+        for connector in connectors:
+            for tool in connector.tool_names:
+                if tool in self._tools:
+                    raise ValueError(f"duplicate tool registration: {tool}")
+                self._tools[tool] = connector
+            for name, check in connector.verification_checks().items():
+                if name in self._checks:
+                    raise ValueError(f"duplicate verification check: {name}")
+                self._checks[name] = check
+
+    @property
+    def connectors(self) -> list[Connector]:
+        return list(self._connectors)
+
+    def tools(self) -> list[str]:
+        return sorted(self._tools)
+
+    def verification_checks(self) -> dict[str, CheckFn]:
+        return dict(self._checks)
+
+    def connector_for(self, action: ActionSpec) -> Connector:
+        requested = action.params.get("connector")
+        candidates = [
+            connector
+            for connector in self._connectors
+            if action.action_type in connector.action_types
+        ]
+        if requested is not None:
+            candidates = [connector for connector in candidates if connector.name == requested]
+        if not candidates:
+            raise ConnectorError(
+                f"no connector available for {action.action_type}"
+                + (f" named {requested!r}" if requested else "")
+            )
+        if len(candidates) > 1:
+            names = sorted(connector.name for connector in candidates)
+            raise ConnectorError(
+                f"ambiguous connector for {action.action_type}: {names}; "
+                "set params.connector explicitly"
+            )
+        return candidates[0]
+
+    async def execute(self, action: ActionSpec) -> dict[str, Any]:
+        validate_action(action)
+        connector = self.connector_for(action)
+        return await connector.execute(action)
+
+    async def collect(self, tool: str, params: dict[str, Any]) -> ToolResult:
+        connector = self._tools.get(tool)
+        if connector is None:
+            raise ConnectorError(f"tool {tool!r} is not in the read-only registry")
+        for key, value in params.items():
+            if isinstance(value, str) and len(value) > 2000:
+                raise ConnectorError(f"tool parameter {key!r} is too long")
+        return await connector.collect(tool, params)
+
+
+def build_registry(settings: Settings) -> ConnectorRegistry:
+    connectors: list[Connector] = []
+    if settings.lab_enabled:
+        connectors.append(LabConnector(settings.lab_base_url))
+    connectors.append(HttpConnector(allow_private=settings.allow_private_probes))
+    if settings.github_token:
+        connectors.append(GitHubConnector(settings.github_token, base_url=settings.github_api_url))
+    if settings.cloudflare_token:
+        connectors.append(
+            CloudflareConnector(settings.cloudflare_token, base_url=settings.cloudflare_api_url)
+        )
+    if settings.notify_webhook_url:
+        connectors.append(WebhookConnector(settings.notify_webhook_url))
+    return ConnectorRegistry(connectors)
