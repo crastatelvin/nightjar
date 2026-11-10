@@ -151,10 +151,36 @@ class IncidentService:
             },
         )
         if wait:
-            await self.run_pipeline(stored.id)
+            await self._start_pipeline(stored.id)
         else:
-            self.spawn(self.run_pipeline(stored.id))
+            self._spawn_or_start(stored.id)
         return await self.repo.get_incident(stored.id)
+
+    def _spawn_or_start(self, incident_id: str) -> None:
+        if self.settings.orchestrator == "temporal":
+            from nightjar.worker.client import start_incident_workflow
+
+            self.spawn(
+                start_incident_workflow(
+                    incident_id,
+                    approval_ttl_seconds=self.settings.approval_ttl_seconds,
+                    stability_seconds=self.settings.stability_seconds,
+                )
+            )
+        else:
+            self.spawn(self.run_pipeline(incident_id))
+
+    async def _start_pipeline(self, incident_id: str) -> None:
+        if self.settings.orchestrator == "temporal":
+            from nightjar.worker.client import start_incident_workflow
+
+            await start_incident_workflow(
+                incident_id,
+                approval_ttl_seconds=self.settings.approval_ttl_seconds,
+                stability_seconds=self.settings.stability_seconds,
+            )
+        else:
+            await self.run_pipeline(incident_id)
 
     def spawn(self, coro: Any) -> None:
         if self._closed:
@@ -704,6 +730,10 @@ class IncidentService:
                     }:
                         await self.repo.set_action_status(action.id, ActionStatus.CANCELLED)
                 await self._fail(approval.incident_id, f"operator {actor} rejected the plan")
+                if self.settings.orchestrator == "temporal":
+                    from nightjar.worker.client import signal_approval
+
+                    await signal_approval(approval.incident_id, False)
                 return await self.repo.get_case_file(approval.incident_id)
 
             remaining = [
@@ -712,6 +742,12 @@ class IncidentService:
                 if item.status is ApprovalStatus.PENDING
             ]
             if remaining:
+                return await self.repo.get_case_file(approval.incident_id)
+
+            if self.settings.orchestrator == "temporal":
+                from nightjar.worker.client import signal_approval
+
+                await signal_approval(approval.incident_id, True)
                 return await self.repo.get_case_file(approval.incident_id)
 
             if incident.status is IncidentStatus.AWAITING_APPROVAL:
@@ -868,9 +904,9 @@ class IncidentService:
             payload={"message": "re-investigation requested"},
         )
         if wait:
-            await self.run_pipeline(incident_id)
+            await self._start_pipeline(incident_id)
         else:
-            self.spawn(self.run_pipeline(incident_id))
+            self._spawn_or_start(incident_id)
         return await self.repo.get_incident(incident_id)
 
 

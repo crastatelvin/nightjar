@@ -163,9 +163,7 @@ def main(argv: list[str] | None = None) -> int:
             lab.stop()
 
     finished_at = datetime.now(UTC)
-    summary = summarize(
-        scores, provider=args.provider, model=args.model, suite=",".join(suites)
-    )
+    summary = summarize(scores, provider=args.provider, model=args.model, suite=",".join(suites))
     thresholds = GateThresholds(
         min_accuracy=args.min_accuracy,
         max_false_resolution_rate=args.max_false_resolution,
