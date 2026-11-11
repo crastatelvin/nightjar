@@ -39,7 +39,7 @@ class LabProcess:
         port = free_port()
         self.base_url = f"http://127.0.0.1:{port}"
         with tempfile.NamedTemporaryFile(
-            prefix="nightjar-eval-lab-", suffix=".log", dir="/tmp/opencode", delete=False
+            prefix="nightjar-eval-lab-", suffix=".log", delete=False
         ) as handle:
             self._log_path = Path(handle.name)
         log = self._log_path.open("wb")

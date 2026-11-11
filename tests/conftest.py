@@ -91,9 +91,7 @@ def lab_url() -> Iterator[str]:
     """Run the synthetic CornerShop environment in its own process."""
     port = _free_port()
     base_url = f"http://127.0.0.1:{port}"
-    with tempfile.NamedTemporaryFile(
-        prefix="nightjar-lab-", suffix=".log", dir="/tmp/opencode", delete=False
-    ) as handle:
+    with tempfile.NamedTemporaryFile(prefix="nightjar-lab-", suffix=".log", delete=False) as handle:
         log_path = Path(handle.name)
     log = log_path.open("wb")
     process = subprocess.Popen(  # noqa: S603 - fixed arguments, local test binary
