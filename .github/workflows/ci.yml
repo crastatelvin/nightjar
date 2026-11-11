@@ -1,0 +1,155 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  PYTHON_VERSION: "3.14"
+
+jobs:
+  python:
+    name: lint, types, tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: nightjar
+          POSTGRES_PASSWORD: nightjar
+          POSTGRES_DB: nightjar_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U nightjar -d nightjar_test"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
+    env:
+      NIGHTJAR_TEST_DATABASE_URL: postgresql+asyncpg://nightjar:nightjar@127.0.0.1:5432/nightjar_test
+      NIGHTJAR_ENVIRONMENT: test
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install
+        run: uv sync --extra dev
+
+      - name: Lint
+        run: |
+          uv run ruff check src tests
+          uv run ruff format --check src tests
+
+      - name: Types
+        run: uv run mypy src
+
+      - name: Tests
+        run: uv run pytest -q
+
+  policy:
+    name: policy parity
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      OPA_VERSION: v1.22.2
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install OPA
+        run: |
+          mkdir -p "$HOME/.local/bin"
+          curl -fsSL -o "$HOME/.local/bin/opa" \
+            "https://github.com/open-policy-agent/opa/releases/download/${OPA_VERSION}/opa_linux_amd64_static"
+          chmod +x "$HOME/.local/bin/opa"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install
+        run: uv sync --extra dev
+
+      - name: Rego tests
+        run: opa test policies/ -v
+
+      - name: Local/Rego parity
+        run: uv run pytest tests/test_policy.py -q
+
+  evals:
+    name: CornerShop evaluation
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: nightjar
+          POSTGRES_PASSWORD: nightjar
+          POSTGRES_DB: nightjar_eval
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U nightjar -d nightjar_eval"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
+    env:
+      NIGHTJAR_EVAL_DATABASE_URL: postgresql+asyncpg://nightjar:nightjar@127.0.0.1:5432/nightjar_eval
+      NIGHTJAR_ENVIRONMENT: test
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install
+        run: uv sync --extra dev
+
+      - name: Run all suites with gates
+        run: uv run nightjar-eval --suite all --output-dir "$RUNNER_TEMP/evals"
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightjar-eval-report
+          path: ${{ runner.temp }}/evals
+          if-no-files-found: warn
+          retention-days: 14
+
+  docker:
+    name: container build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: deploy/docker/Dockerfile
+          push: false
+          tags: nightjar:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
