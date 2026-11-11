@@ -1,0 +1,130 @@
+name: nightjar
+
+x-nightjar-env: &nightjar-env
+  NIGHTJAR_ENVIRONMENT: ${NIGHTJAR_ENVIRONMENT:-development}
+  NIGHTJAR_LOG_LEVEL: ${NIGHTJAR_LOG_LEVEL:-INFO}
+  NIGHTJAR_DATABASE_URL: postgresql+asyncpg://nightjar:${POSTGRES_PASSWORD:-nightjar}@db:5432/nightjar
+  NIGHTJAR_API_TOKEN: ${NIGHTJAR_API_TOKEN:-}
+  NIGHTJAR_CORS_ORIGINS: ${NIGHTJAR_CORS_ORIGINS:-http://127.0.0.1:3000}
+  NIGHTJAR_MODEL_PROVIDER: ${NIGHTJAR_MODEL_PROVIDER:-mock}
+  NIGHTJAR_MODEL_NAME: ${NIGHTJAR_MODEL_NAME:-rules-v1}
+  NIGHTJAR_MODEL_API_KEY: ${NIGHTJAR_MODEL_API_KEY:-}
+  NIGHTJAR_CRITIC_PROVIDER: ${NIGHTJAR_CRITIC_PROVIDER:-mock}
+  NIGHTJAR_CRITIC_MODEL_NAME: ${NIGHTJAR_CRITIC_MODEL_NAME:-rules-v1}
+  NIGHTJAR_CRITIC_API_KEY: ${NIGHTJAR_CRITIC_API_KEY:-}
+  NIGHTJAR_LAB_BASE_URL: http://lab:8100
+  NIGHTJAR_LAB_ENABLED: "true"
+  NIGHTJAR_ALLOW_PRIVATE_PROBES: "true"
+  NIGHTJAR_STABILITY_SECONDS: ${NIGHTJAR_STABILITY_SECONDS:-30}
+  NIGHTJAR_APPROVAL_TTL_SECONDS: ${NIGHTJAR_APPROVAL_TTL_SECONDS:-1800}
+  NIGHTJAR_GITHUB_TOKEN: ${NIGHTJAR_GITHUB_TOKEN:-}
+  NIGHTJAR_CLOUDFLARE_TOKEN: ${NIGHTJAR_CLOUDFLARE_TOKEN:-}
+  NIGHTJAR_NOTIFY_WEBHOOK_URL: ${NIGHTJAR_NOTIFY_WEBHOOK_URL:-}
+
+services:
+  db:
+    image: postgres:18
+    environment:
+      POSTGRES_USER: nightjar
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-nightjar}
+      POSTGRES_DB: nightjar
+    ports:
+      - "127.0.0.1:55432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nightjar -d nightjar"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  migrate:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile
+    command: ["alembic", "upgrade", "head"]
+    environment: *nightjar-env
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
+  lab:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile
+    command: ["nightjar-lab", "--host", "0.0.0.0", "--port", "8100"]
+    ports:
+      - "127.0.0.1:8100:8100"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8100/healthz', timeout=2)"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile
+    command: ["nightjar-api"]
+    environment:
+      <<: *nightjar-env
+      NIGHTJAR_API_HOST: 0.0.0.0
+      NIGHTJAR_ORCHESTRATOR: ${NIGHTJAR_ORCHESTRATOR:-inline}
+      NIGHTJAR_TEMPORAL_ADDRESS: temporal:7233
+    ports:
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      lab:
+        condition: service_healthy
+
+  worker:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile
+    command: ["nightjar-worker"]
+    environment:
+      <<: *nightjar-env
+      NIGHTJAR_ORCHESTRATOR: temporal
+      NIGHTJAR_TEMPORAL_ADDRESS: temporal:7233
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      temporal:
+        condition: service_started
+    profiles: ["durable"]
+
+  temporal:
+    image: temporalio/auto-setup:1.32.2
+    environment:
+      DB: postgres12
+      DB_PORT: 5432
+      POSTGRES_USER: temporal
+      POSTGRES_PWD: temporal
+      POSTGRES_SEEDS: temporal-db
+    ports:
+      - "127.0.0.1:7233:7233"
+    depends_on:
+      temporal-db:
+        condition: service_healthy
+    profiles: ["durable"]
+
+  temporal-db:
+    image: postgres:18
+    environment:
+      POSTGRES_USER: temporal
+      POSTGRES_PASSWORD: temporal
+    volumes:
+      - temporaldata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U temporal"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    profiles: ["durable"]
+
+volumes:
+  pgdata:
+  temporaldata:
