@@ -19,3 +19,6 @@ htmlcov/
 .tmp/
 .DS_Store
 .tsbuildinfo
+
+# Generated evaluation reports are local artifacts.
+evals/reports/

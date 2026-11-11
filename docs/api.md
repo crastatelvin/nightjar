@@ -1,0 +1,184 @@
+# API reference
+
+Base URL: `http://127.0.0.1:8000`
+
+All `/v1` endpoints require `Authorization: Bearer <NIGHTJAR_API_TOKEN>`. Health
+endpoints are unauthenticated so orchestrators can probe them. Errors use
+`{"detail": "..."}` with `404`, `409`, or `422` as appropriate.
+
+## Health
+
+### `GET /healthz`
+
+```json
+{"status": "ok"}
+```
+
+### `GET /readyz`
+
+```json
+{"status": "ready", "checks": {"database": true}}
+```
+
+## Metadata
+
+### `GET /v1/meta`
+
+```json
+{
+  "name": "nightjar",
+  "version": "0.1.0",
+  "provider": "mock",
+  "model": "rules-v1",
+  "connectors": ["lab", "http"],
+  "tools": ["lab.site_state", "http.get"],
+  "action_catalog": {"purge_cache": "r1", "revoke_credential": "r2"}
+}
+```
+
+## Incidents
+
+### `POST /v1/incidents`
+
+Query: `wait=true|false` (default `false`). With `wait=true`, the request runs
+the pipeline until it needs approval or reaches a terminal state.
+
+```json
+{
+  "title": "Checkout is failing across the storefront",
+  "description": "Customers report errors at checkout.",
+  "incident_class": "site_outage",
+  "severity": "critical",
+  "source": "webhook",
+  "metadata": {"site_url": "https://shop.example", "service": "web"},
+  "dedupe_key": "monitor-alert-123"
+}
+```
+
+Returns `201` with the incident. `dedupe_key` returns the existing incident
+when the key is reused.
+
+### `GET /v1/incidents`
+
+Query: `status`, `limit` (default 50), `offset`.
+
+```json
+{
+  "items": [
+    {
+      "id": "019f…",
+      "title": "Checkout is failing",
+      "incident_class": "site_outage",
+      "severity": "critical",
+      "status": "awaiting_approval",
+      "summary": null,
+      "confidence": 0.93,
+      "created_at": "2026-11-10T08:00:00Z",
+      "updated_at": "2026-11-10T08:00:12Z",
+      "resolved_at": null
+    }
+  ],
+  "total": 1,
+  "limit": 50,
+  "offset": 0
+}
+```
+
+### `GET /v1/incidents/{id}`
+
+Returns the full case file: incident, evidence, timeline, plan, actions, action
+states, approvals, verifications, executions, agent runs, notes, findings, and
+chain status.
+
+### `GET /v1/incidents/{id}/timeline?after_seq=N`
+
+Incremental timeline. `after_seq` returns only later events, so the UI can
+append without re-reading the whole ledger.
+
+### `GET /v1/incidents/{id}/chain`
+
+```json
+{
+  "evidence_valid": true,
+  "timeline_valid": true,
+  "evidence_checked": 12,
+  "timeline_checked": 28,
+  "broken_at": null
+}
+```
+
+`broken_at` names the first evidence item or timeline event whose hash does not
+match.
+
+### `GET /v1/incidents/{id}/stream`
+
+Server-Sent Events stream of case-file snapshots. Reconnects are supported; the
+client should seed from `after_seq` and reconcile by incident id.
+
+Event names:
+
+- `case` — full case file snapshot
+- `error` — stream failure
+
+### `POST /v1/incidents/{id}/notes`
+
+Header `x-nightjar-actor: alice`, body `{"body": "Talked to the owner."}`.
+
+### `POST /v1/incidents/{id}/retry`
+
+Allowed only from `failed`, `reopened`, or `cancelled`. Creates a new plan;
+older plans remain in history.
+
+### `POST /v1/incidents/{id}/verify`
+
+Query: `phase=t0|stability`. Runs required predicates immediately and applies
+the same resolve/reopen rules.
+
+## Approvals
+
+### `GET /v1/incidents/{id}/approvals`
+
+Lists approval requests with status `pending`, `approved`, `rejected`, or
+`expired`.
+
+### `POST /v1/incidents/{id}/approvals/{approval_id}`
+
+Header `x-nightjar-actor: alice`.
+
+```json
+{"approved": true, "comment": "Rotate the key."}
+```
+
+- `200` — decision recorded; returns the case file.
+- `409` — approval already decided or expired.
+
+Approving the last pending approval executes the plan. Rejecting any pending
+approval marks the denied action `denied`, cancels the rest, and fails the
+incident. Nothing executes on rejection.
+
+## Authentication and configuration
+
+| Variable | Purpose |
+| --- | --- |
+| `NIGHTJAR_API_TOKEN` | Bearer token required by `/v1` |
+| `NIGHTJAR_CORS_ORIGINS` | Comma-separated browser origins |
+| `NIGHTJAR_ORCHESTRATOR` | `inline` (default) or `temporal` |
+| `NIGHTJAR_STABILITY_SECONDS` | Stability window after T+0 |
+| `NIGHTJAR_APPROVAL_TTL_SECONDS` | Approval expiry |
+| `NIGHTJAR_ALLOW_PRIVATE_PROBES` | Allow loopback probes in labs (default true) |
+| `NIGHTJAR_OPA_URL` | Use a remote OPA policy engine |
+
+## curl walkthrough
+
+```bash
+TOKEN=devtoken
+API=http://127.0.0.1:8000
+
+curl -s -H "Authorization: Bearer $TOKEN" "$API/v1/meta"
+curl -s -X POST -H "Authorization: Bearer $TOKEN" -H 'content-type: application/json' \
+  -d '{"title":"Checkout failing","incident_class":"site_outage","severity":"critical"}' \
+  "$API/v1/incidents?wait=true"
+```
+
+The returned incident is either `awaiting_approval` or terminal. Read the case
+file, approve the pending request, then poll until `resolved` or `reopened`.
