@@ -80,6 +80,22 @@ services:
       lab:
         condition: service_healthy
 
+  web:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/web.Dockerfile
+    environment:
+      NIGHTJAR_API_URL: http://api:8000
+      NIGHTJAR_LAB_URL: http://lab:8100
+      NIGHTJAR_API_TOKEN: ${NIGHTJAR_API_TOKEN:-}
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      api:
+        condition: service_started
+      lab:
+        condition: service_healthy
+
   worker:
     build:
       context: ../..

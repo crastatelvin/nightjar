@@ -9,7 +9,6 @@ __pycache__
 *.py[cod]
 node_modules
 .next
-apps/web
 dist
 build
 *.egg-info
