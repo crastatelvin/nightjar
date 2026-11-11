@@ -213,7 +213,7 @@ class Lab:
             return self._seed(seed)
         if scenario == "credential_leaked":
             cred_id = f"cred_stripe_{variant + 1:04d}"
-            key = "sk_live_" + secrets.token_urlsafe(18)[:24]
+            key = "sk_live_EXAMPLE_" + secrets.token_urlsafe(18)[:18]
             self.credentials[cred_id] = Credential(
                 id=cred_id,
                 provider="stripe",
@@ -346,7 +346,7 @@ class Lab:
             return {"credential_id": credential_id, "status": "revoked", "already": True}
         credential.status = "revoked"
         replacement = f"cred_replacement_{secrets.token_hex(4)}"
-        key = "sk_live_" + secrets.token_urlsafe(18)[:24]
+        key = "sk_live_EXAMPLE_" + secrets.token_urlsafe(18)[:18]
         self.credentials[replacement] = Credential(
             id=replacement,
             provider=credential.provider,
