@@ -25,6 +25,20 @@ SOC-first (Vigil, Shuffle). Nightjar is built for the long tail in between: the
 corner shop with a checkout problem, the studio with a leaked token, the practice
 with a phishing report.
 
+![Nightjar command deck](docs/assets/dashboard.png)
+
+The case file is the product: findings with claim verdicts, a typed plan, the human
+gate, the predicates that actually ran, and the hash-chained evidence behind every
+statement.
+
+| Case file | Verification |
+| --- | --- |
+| ![Case file](docs/assets/case-file.png) | ![Verification predicates](docs/assets/verification.png) |
+
+| Fault studio | Connection settings |
+| --- | --- |
+| ![Fault studio](docs/assets/studio.png) | ![Settings](docs/assets/settings.png) |
+
 ## The difference: verification is the product
 
 An incident is not resolved because a model says so. The remediation plan declares,
@@ -104,8 +118,12 @@ Run the lab and API in separate terminals:
 
 ```bash
 nightjar-lab --port 8100
-nightjar-api                 # http://127.0.0.1:8000
+NIGHTJAR_STABILITY_SECONDS=30 nightjar-api   # http://127.0.0.1:8000
 ```
+
+The quickstart uses a 30-second stability window so the whole loop resolves while you
+watch. The production default is 900 seconds; set `NIGHTJAR_STABILITY_SECONDS` to match
+how long your fix needs to hold before you will call it resolved.
 
 Inject a fault, then file an incident:
 
@@ -170,8 +188,39 @@ Web app:
 ```bash
 cd apps/web
 npm ci
-npm run dev
+npm run dev            # http://127.0.0.1:3000
 ```
+
+The UI is a client of the public API, so start the lab and control plane first. It has
+four surfaces:
+
+- `/` — command deck: live incident stream, human decision queue, proof seal, chain state
+- `/incidents/[id]` — case file: findings and claim verdicts, typed plan, approval gate,
+  T+0 and stability predicates, evidence ledger, hash-chain status, model calls, notes
+- `/studio` — fault studio: inject any CornerShop scenario, choose a variant, embed the
+  injection corpus or a relapse, then follow the same seven-stage loop
+- `/settings` — connection and safety: API base, bearer token, actor, action catalogue
+
+The browser calls `http://127.0.0.1:8000` by default. Change it in Settings; the value
+is stored in that browser profile only. The fault studio calls the lab and API from a
+Next.js route so the lab does not need CORS. Configure that proxy with:
+
+```bash
+NIGHTJAR_API_URL=http://127.0.0.1:8000
+NIGHTJAR_LAB_URL=http://127.0.0.1:8100
+NIGHTJAR_API_TOKEN=          # only if the control plane requires a bearer token
+```
+
+For a production build, use the standalone output:
+
+```bash
+npm run build
+node .next/standalone/server.js
+```
+
+When the API enforces a token, add the UI origin to `NIGHTJAR_CORS_ORIGINS`
+(comma-separated or a JSON list). Compose starts the UI at
+`http://127.0.0.1:3000` with `docker compose -f deploy/compose/compose.yaml up --build`.
 
 ## Documentation
 
@@ -185,9 +234,9 @@ npm run dev
 
 ## Status
 
-Pre-alpha, building in public. The control plane, closed loop, evaluation suite, and
-optional durable orchestration are working. The case-file UI is in progress. The
-repository is private until 0.1; the license and governance are already final.
+Pre-alpha, building in public. The control plane, closed loop, evaluation suite, web UI,
+and optional durable orchestration are working. The repository is private until 0.1; the
+license and governance are already final.
 
 ## Contributing
 

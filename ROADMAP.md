@@ -60,12 +60,33 @@ injection-resistance, cost, and latency metrics.
 Docker images, Compose stack, CI gates for lint/type/test/OPA/eval, security
 checklist, threat model, ADRs, governance, and DCO.
 
-### Phase 5 — The living case file (in progress)
+### Phase 5 — The living case file (core complete)
 
 The web UI is not a dashboard bolted onto the API. It is the case file: the
 artifact a tired operator reads at 03:00 to decide whether to trust the
 machine. Every animation must carry information or calm the operator; nothing
 decorates for its own sake.
+
+Delivered:
+
+1. Next.js 16 + React 19 + Tailwind 4 shell, rail navigation, command palette.
+2. Design system: dark glass, accent aurora, semantic status colors, motion tokens.
+3. Command deck: live KPI counters, incident stream, decision queue, proof seal.
+4. Case file: lifecycle stepper, findings and claim verdicts, plan and approval
+   panel, verification results, evidence ledger, chain integrity, model calls,
+   operator notes, SSE live updates with a polling fallback.
+5. Fault studio: five scenarios, six variants, injection corpus, relapse toggle,
+   live lab audit, reset.
+6. Settings: API base, bearer token, actor, connection probe, action catalogue.
+7. Ambient canvas, cursor glow, pointer tilt, staggered reveals, tactile press,
+   reduced-motion path, responsive layout, keyboard palette.
+8. `npm run typecheck` and `npm run build` in CI; standalone image in Compose.
+
+Remaining:
+
+- A Playwright visual smoke test that renders the four routes against a seeded
+  API and asserts the critical text. The current validation is a manual browser
+  pass plus typecheck/build.
 
 Performance and motion requirements:
 
@@ -88,17 +109,6 @@ Performance and motion requirements:
   miss: the incident stays red until the lab and predicates agree.
 - **Evidence first.** Every claim shows its hash, its source, and a verifier
   result. The UI never presents an unreachable or unverifiable state as green.
-
-Delivery:
-
-1. Next.js 16 + React 19 + Tailwind 4 shell with token gate and routing.
-2. Design system: dark glass, accent aurora, semantic status colors, motion tokens.
-3. Dashboard: live KPI counters, incident stream, risk/approval queue.
-4. Case file: animated timeline, evidence ledger, plan and approval panel,
-   verification results, chain integrity, SSE live updates.
-5. Ambient canvas, cursor glow, pointer tilt, and micro-interactions.
-6. Responsive 320 px → ultrawide; keyboard navigation; reduced-motion path.
-7. Build/lint/type checks wired into CI; visual smoke test with Playwright.
 
 ### Phase 6 — Public launch
 
