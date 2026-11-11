@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+import json
 from functools import lru_cache
-from typing import Literal
+from typing import Annotated, Any, Literal
 
-from pydantic import Field
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import Field, field_validator
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -26,7 +27,25 @@ class Settings(BaseSettings):
     api_host: str = "127.0.0.1"
     api_port: int = 8000
     api_token: str | None = None
-    cors_origins: list[str] = Field(default_factory=lambda: ["http://127.0.0.1:3000"])
+    cors_origins: Annotated[list[str], NoDecode] = Field(
+        default_factory=lambda: ["http://127.0.0.1:3000"]
+    )
+
+    @field_validator("cors_origins", mode="before")
+    @classmethod
+    def parse_cors_origins(cls, value: Any) -> Any:
+        """Accept a JSON list or the comma-separated form used in .env.example."""
+        if isinstance(value, str):
+            text = value.strip()
+            if not text:
+                return []
+            if text.startswith("["):
+                parsed = json.loads(text)
+                if not isinstance(parsed, list):
+                    raise ValueError("cors_origins JSON must be a list")
+                return parsed
+            return [part.strip() for part in text.split(",") if part.strip()]
+        return value
 
     orchestrator: Literal["inline", "temporal"] = "inline"
     temporal_address: str = "127.0.0.1:7233"
