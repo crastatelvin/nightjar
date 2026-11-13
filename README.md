@@ -239,6 +239,9 @@ When the API enforces a token, add the UI origin to `NIGHTJAR_CORS_ORIGINS`
 - [Architecture](docs/architecture.md)
 - [API reference](docs/api.md)
 - [Evaluation](docs/evals.md)
+- [Real-world readiness plan](docs/plan/real-world-readiness.md) — provider
+  endpoints, scopes, verification predicates, and the micro-task backlog to make
+  every action real
 - [ADRs](docs/adr/)
 - [Threat model](docs/security/threat-model.md)
 - [Security checklist](docs/security/checklist.md)
@@ -266,7 +269,11 @@ Not yet real:
 
 - credential revocation, message quarantine, sender blocking, deployment rollback, and
   service restart have **no production connector**; they run against the lab only, so a
-  real exposed-credential or phishing incident cannot be remediated end to end yet;
+  real exposed-credential or phishing incident cannot be remediated end to end yet.
+  [docs/plan/real-world-readiness.md](docs/plan/real-world-readiness.md) is the work
+  order that closes this, including the one case that cannot be automated: Stripe has
+  no public API to expire a secret key, so Nightjar proves the key is dead after a
+  human expires it;
 - no evaluation has been recorded against a hosted model, so model quality, cost, and
   latency numbers are mock-only;
 - one shared bearer token and a self-asserted actor; no per-user identity, RBAC, or rate

@@ -21,7 +21,11 @@ that claim is tamper-evident.
 - [x] Apache-2.0 + DCO, security policy, threat model
 - [x] Docker Compose, CI, and release checks
 - [x] **Phase 5 — the living case file** (core complete; see below)
-- [ ] 0.1 public launch: real connectors, docs site pass, publish pipeline, changelog
+- [ ] **Phase 6 — production execution surface** (in progress; see the
+      [readiness plan](docs/plan/real-world-readiness.md))
+- [ ] Phase 7 — multi-process and identity
+- [ ] Phase 8 — evidence for skeptics
+- [ ] Phase 9 — 0.1 public launch
 
 ## v1 scope
 
@@ -111,14 +115,56 @@ Performance and motion requirements:
 - **Evidence first.** Every claim shows its hash, its source, and a verifier
   result. The UI never presents an unreachable or unverifiable state as green.
 
-### Phase 6 — Public launch
+### Phase 6 — Production execution surface (in progress)
+
+The full work order, with endpoints, scopes, verification predicates, file paths,
+tests, and estimates, is [docs/plan/real-world-readiness.md](docs/plan/real-world-readiness.md).
+
+The gap is execution, not orchestration. Five of the ten action types exist only
+in the lab, so an exposed credential or a phishing report can be investigated and
+planned but not fixed. This phase makes each one real, or marks it as a manual
+step that is still verified.
+
+1. **Safe defaults.** Production refuses the lab connector, private probes, a
+   missing token, an empty target allowlist, and a short stability window.
+2. **Connector SDK v2.** Capability report, typed errors, local idempotency,
+   per-provider rate limits, secret references instead of raw values.
+3. **Credential revocation.** GitHub PAT/OAuth/App tokens, Google OAuth tokens,
+   Microsoft sign-in sessions. Stripe has no public revoke API, so it becomes a
+   manual step whose completion is proven by a `401` probe.
+4. **Mail containment.** Google Workspace labels and filters; Microsoft 365
+   message move, inbox rules, and session revocation.
+5. **Deploy and runtime.** Cloudflare Pages, Vercel, and Render rollback; Fly and
+   Render restart. Render rollback also pauses autodeploy, or the next push
+   undoes it.
+6. **Capability probe.** `nightjarctl doctor` and `GET /v1/meta/capabilities` so
+   an operator sees which providers are live and which scopes are missing before
+   an incident.
+7. **Managed targets.** A policy-enforced allowlist of zones, repos, mailboxes,
+   projects, and apps. The model may name a target; it may not invent one.
+
+### Phase 7 — Multi-process and identity
+
+- Postgres advisory locks for per-incident work; scheduler leader election. The
+  in-process `asyncio.Lock` is the only safe topology today.
+- OIDC authentication, role mapping, separation of duties for approvals, rate
+  limits, request size caps, and request IDs.
+- SSE over `LISTEN/NOTIFY` with the poll as fallback.
+
+### Phase 8 — Evidence for skeptics
+
+- Recorded hosted-model baselines per provider; cost and latency budgets.
+- Nightly live-connector suite against sandbox accounts.
+- Backup/restore verification, migration upgrade tests, Compose smoke test.
+- Operator runbooks for the three v1 incident classes.
+
+### Phase 9 — Public launch
 
 - Publish 0.1 with a pinned changelog and upgrade note.
-- Add an anonymous opt-out telemetry toggle (off by default) once the schema
-  exists; keep the ledger local-first.
-- Expand connectors: Stripe test-mode verification, mail provider adapters,
-  Cloudflare and GitHub actions as real, non-simulated operations.
-- Operator runbooks for the three v1 incident classes.
+- Signed images, SBOM, PyPI workflow, CodeQL, Dependabot, code of conduct.
+- Docs site pass, demo recording, accessibility and screenshot baselines.
+- Anonymous opt-out telemetry toggle (off by default) once the schema exists;
+  keep the ledger local-first.
 
 ## Non-goals for v1
 
