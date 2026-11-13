@@ -104,6 +104,17 @@ def test_operator_notes_are_kept_on_the_case_file(client: TestClient, lab) -> No
     assert notes[-1]["author"] == "alice"
     assert notes[-1]["body"] == "Talked to the on-call owner."
 
+    # The note is part of the ledger, not a side table: the live stream pushes
+    # timeline entries, and an unaudited note would be a claim without a hash.
+    timeline = client.get(f"/v1/incidents/{incident['id']}/timeline").json()["events"]
+    noted = [event for event in timeline if event["event_type"] == "note"]
+    assert len(noted) == 1
+    assert noted[0]["actor"] == "alice"
+    assert noted[0]["payload"]["body"] == "Talked to the on-call owner."
+    assert noted[0]["payload"]["note_id"] == notes[-1]["id"]
+    assert noted[0]["prev_hash"] == timeline[-2]["hash"]
+    assert client.get(f"/v1/incidents/{incident['id']}/chain").json()["timeline_valid"] is True
+
 
 def test_timeline_can_be_read_incrementally(client: TestClient, lab) -> None:
     payload = scenario_payload(lab, "site_cache_poisoned")

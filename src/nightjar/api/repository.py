@@ -369,44 +369,62 @@ class Repository:
         payload: dict[str, Any] | None = None,
     ) -> TimelineEvent:
         async with self._session_factory() as session, session.begin():
-            locked = await session.scalar(
-                select(IncidentRow.id).where(IncidentRow.id == incident_id).with_for_update()
+            return await self._append_event_in_session(
+                session, incident_id, event_type, actor=actor, payload=payload
             )
-            if locked is None:
-                raise NotFoundError(f"incident {incident_id} not found")
-            row = await session.execute(
-                select(TimelineRow.seq, TimelineRow.hash)
-                .where(TimelineRow.incident_id == incident_id)
-                .order_by(TimelineRow.seq.desc())
-                .limit(1)
+
+    async def _append_event_in_session(
+        self,
+        session: AsyncSession,
+        incident_id: str,
+        event_type: EventType,
+        *,
+        actor: str = "system",
+        payload: dict[str, Any] | None = None,
+    ) -> TimelineEvent:
+        """Seal one event onto the chain inside an existing transaction.
+
+        Callers that write other rows in the same transaction (a note, an
+        approval) use this so the record and its chain entry commit together.
+        """
+        locked = await session.scalar(
+            select(IncidentRow.id).where(IncidentRow.id == incident_id).with_for_update()
+        )
+        if locked is None:
+            raise NotFoundError(f"incident {incident_id} not found")
+        row = await session.execute(
+            select(TimelineRow.seq, TimelineRow.hash)
+            .where(TimelineRow.incident_id == incident_id)
+            .order_by(TimelineRow.seq.desc())
+            .limit(1)
+        )
+        last = row.first()
+        seq = (last.seq + 1) if last else 1
+        prev_hash = last.hash if last else ""
+        event = seal_event(
+            TimelineEvent(
+                incident_id=incident_id,
+                seq=seq,
+                event_type=event_type,
+                actor=actor,
+                payload=payload or {},
+            ),
+            prev_hash,
+        )
+        session.add(
+            TimelineRow(
+                id=event.id,
+                incident_id=incident_id,
+                seq=event.seq,
+                event_type=event.event_type.value,
+                actor=event.actor,
+                payload=event.payload,
+                created_at=event.created_at,
+                prev_hash=event.prev_hash,
+                hash=event.hash,
             )
-            last = row.first()
-            seq = (last.seq + 1) if last else 1
-            prev_hash = last.hash if last else ""
-            event = seal_event(
-                TimelineEvent(
-                    incident_id=incident_id,
-                    seq=seq,
-                    event_type=event_type,
-                    actor=actor,
-                    payload=payload or {},
-                ),
-                prev_hash,
-            )
-            session.add(
-                TimelineRow(
-                    id=event.id,
-                    incident_id=incident_id,
-                    seq=event.seq,
-                    event_type=event.event_type.value,
-                    actor=event.actor,
-                    payload=event.payload,
-                    created_at=event.created_at,
-                    prev_hash=event.prev_hash,
-                    hash=event.hash,
-                )
-            )
-            return event
+        )
+        return event
 
     async def append_evidence(self, item: EvidenceItem) -> EvidenceItem:
         async with self._session_factory() as session, session.begin():
@@ -723,9 +741,24 @@ class Repository:
             )
             return [_agent_run(row) for row in rows]
 
-    async def add_note(self, incident_id: str, author: str, body: str) -> None:
+    async def add_note(self, incident_id: str, author: str, body: str) -> dict[str, Any]:
+        """Store an operator note and seal it onto the timeline.
+
+        The note and its chain entry commit in one transaction: a note that is
+        not in the ledger would be an unaudited claim, and the live stream uses
+        the timeline entry to push the note to every open case file.
+        """
+        note_id = new_id()
         async with self._session_factory() as session, session.begin():
-            session.add(NoteRow(id=new_id(), incident_id=incident_id, author=author, body=body))
+            session.add(NoteRow(id=note_id, incident_id=incident_id, author=author, body=body))
+            await self._append_event_in_session(
+                session,
+                incident_id,
+                EventType.NOTE,
+                actor=author,
+                payload={"note_id": note_id, "body": body},
+            )
+        return {"id": note_id, "author": author, "body": body}
 
     async def list_notes(self, incident_id: str) -> list[dict[str, Any]]:
         async with self._session_factory() as session:
