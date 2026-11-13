@@ -162,6 +162,111 @@ jobs:
         env:
           NEXT_TELEMETRY_DISABLED: "1"
 
+  e2e:
+    name: web smoke test
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: nightjar
+          POSTGRES_PASSWORD: nightjar
+          POSTGRES_DB: nightjar_e2e
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U nightjar -d nightjar_e2e"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
+    env:
+      NIGHTJAR_DATABASE_URL: postgresql+asyncpg://nightjar:nightjar@127.0.0.1:5432/nightjar_e2e
+      NIGHTJAR_ENVIRONMENT: test
+      NIGHTJAR_CORS_ORIGINS: http://127.0.0.1:3000
+      NIGHTJAR_STABILITY_SECONDS: "10"
+      NIGHTJAR_ALLOW_PRIVATE_PROBES: "true"
+      NIGHTJAR_LAB_ENABLED: "true"
+      NIGHTJAR_LAB_BASE_URL: http://127.0.0.1:8100
+      NIGHTJAR_MODEL_PROVIDER: mock
+      NIGHTJAR_CRITIC_PROVIDER: mock
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install API
+        run: uv sync --extra dev
+
+      - name: Migrate
+        run: uv run alembic upgrade head
+
+      - name: Start lab and API
+        run: |
+          nohup uv run nightjar-lab --host 127.0.0.1 --port 8100 > "$RUNNER_TEMP/lab.log" 2>&1 &
+          nohup uv run nightjar-api > "$RUNNER_TEMP/api.log" 2>&1 &
+          for _ in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:8100/healthz >/dev/null \
+              && curl -fsS http://127.0.0.1:8000/healthz >/dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "services did not become healthy"
+          tail -40 "$RUNNER_TEMP/lab.log" "$RUNNER_TEMP/api.log"
+          exit 1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+
+      - name: Install web dependencies
+        working-directory: apps/web
+        run: npm ci --no-audit --no-fund
+
+      - name: Build web
+        working-directory: apps/web
+        run: npm run build
+
+      - name: Install browser
+        working-directory: apps/web
+        run: npx playwright install --with-deps chromium
+
+      - name: Start standalone server
+        working-directory: apps/web
+        run: |
+          cp -r .next/static .next/standalone/.next/static
+          PORT=3000 HOSTNAME=127.0.0.1 nohup node .next/standalone/server.js > "$RUNNER_TEMP/web.log" 2>&1 &
+          for _ in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:3000/ >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          tail -40 "$RUNNER_TEMP/web.log"
+          exit 1
+
+      - name: Smoke test
+        working-directory: apps/web
+        run: npm run test:e2e
+        env:
+          PLAYWRIGHT_BASE_URL: http://127.0.0.1:3000
+
+      - name: Upload report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightjar-playwright-report
+          path: |
+            apps/web/playwright-report
+            apps/web/test-results
+          if-no-files-found: ignore
+          retention-days: 7
+
   docker:
     name: container build
     runs-on: ubuntu-latest
