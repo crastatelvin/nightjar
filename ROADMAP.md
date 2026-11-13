@@ -1,6 +1,6 @@
 # Nightjar roadmap
 
-Last updated: 2026-11-10
+Last updated: 2026-11-13
 
 Nightjar is a verification-first incident response agent for small organizations.
 The product thesis is simple: an incident is not resolved because a model says so.
@@ -20,8 +20,8 @@ that claim is tamper-evident.
 - [x] CornerShop-30 evaluation plus relapse-6 and injection-10 suites
 - [x] Apache-2.0 + DCO, security policy, threat model
 - [x] Docker Compose, CI, and release checks
-- [ ] **Phase 5 — the living case file** (in progress; see below)
-- [ ] 0.1 public launch: docs site pass, publish pipeline, changelog
+- [x] **Phase 5 — the living case file** (core complete; see below)
+- [ ] 0.1 public launch: real connectors, docs site pass, publish pipeline, changelog
 
 ## v1 scope
 

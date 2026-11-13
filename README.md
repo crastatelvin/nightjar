@@ -68,7 +68,8 @@ Mean latency 0.88 s, p95 2.07 s. See [docs/evals.md](docs/evals.md) for methodol
 - A deterministic policy engine decides allow / approve / deny. A Rego reference
   policy and the local engine return identical decisions.
 - R2 actions require an approved, unexpired human approval scoped to the current
-  plan. R3 is denied unless break-glass with two approvals.
+  plan. R3 actions are denied in v1: the policy engine has a break-glass path
+  (two approvals) but the API does not expose it yet.
 - Untrusted content (mail, web pages, deployment notes) is redacted, wrapped as data,
   and never parsed as instructions.
 - Every claim cites hash-chained evidence; tampering is detectable.
@@ -248,6 +249,33 @@ When the API enforces a token, add the UI origin to `NIGHTJAR_CORS_ORIGINS`
 Pre-alpha, building in public. The control plane, closed loop, evaluation suite, web UI,
 and optional durable orchestration are working. The repository is private until 0.1; the
 license and governance are already final.
+
+### What is real today, and what is not
+
+Real and exercised end to end:
+
+- the closed loop, typed actions, policy, approvals, verification, and the hash-chained
+  ledger, against the CornerShop lab and 46 evaluation cases;
+- read-only probes (`http.get`) with SSRF guarding, and verification predicates
+  (HTTP status, JSON path, DNS, TLS) against any URL you configure;
+- Cloudflare cache purge and under-attack, GitHub issue creation, and webhook notify
+  as typed, non-simulated operations;
+- the API, SSE stream, UI, standalone image, and CI.
+
+Not yet real:
+
+- credential revocation, message quarantine, sender blocking, deployment rollback, and
+  service restart have **no production connector**; they run against the lab only, so a
+  real exposed-credential or phishing incident cannot be remediated end to end yet;
+- no evaluation has been recorded against a hosted model, so model quality, cost, and
+  latency numbers are mock-only;
+- one shared bearer token and a self-asserted actor; no per-user identity, RBAC, or rate
+  limiting;
+- one API process is the only safe topology: the stability scheduler and per-incident
+  locks are in-process, so replicas would double-run checks;
+- safe-by-default settings: the lab connector and private probes are on unless you turn
+  them off, so a production deployment must set `NIGHTJAR_LAB_ENABLED=false`,
+  `NIGHTJAR_ALLOW_PRIVATE_PROBES=false`, and a token explicitly.
 
 ## Contributing
 
