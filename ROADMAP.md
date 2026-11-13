@@ -81,12 +81,13 @@ Delivered:
 7. Ambient canvas, cursor glow, pointer tilt, staggered reveals, tactile press,
    reduced-motion path, responsive layout, keyboard palette.
 8. `npm run typecheck` and `npm run build` in CI; standalone image in Compose.
+9. Playwright smoke test over all four routes against the real lab, API, and
+   standalone build: live stream updates, the approval path, the demo proxy, and
+   the connection probe. It runs in CI and uploads traces on failure.
 
 Remaining:
 
-- A Playwright visual smoke test that renders the four routes against a seeded
-  API and asserts the critical text. The current validation is a manual browser
-  pass plus typecheck/build.
+- Screenshot regression baselines, once the layout settles for 0.1.
 
 Performance and motion requirements:
 
