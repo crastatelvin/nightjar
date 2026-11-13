@@ -115,6 +115,13 @@ export const IconMail = (p: IconProps) => (
   </Base>
 );
 
+export const IconPen = (p: IconProps) => (
+  <Base {...p}>
+    <path d="M4 20h4l10.5-10.5a2.1 2.1 0 0 0-3-3L5 17v3Z" />
+    <path d="m13.5 6.5 4 4" />
+  </Base>
+);
+
 export const IconOutage = (p: IconProps) => (
   <Base {...p}>
     <rect x="3" y="4" width="18" height="13" rx="2" />

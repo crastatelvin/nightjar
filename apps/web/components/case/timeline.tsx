@@ -10,7 +10,7 @@ import {
   IconKey,
   IconLink,
   IconLock,
-  IconMail,
+  IconPen,
   IconPulse,
   IconRadar,
   IconSearch,
@@ -40,7 +40,7 @@ function iconFor(type: string) {
   if (type.startsWith("verification")) return IconCheck;
   if (type === "incident.reopened") return IconAlert;
   if (type === "incident.resolved") return IconCheck;
-  if (type === "note") return IconMail;
+  if (type === "note") return IconPen;
   return IconPulse;
 }
 
@@ -53,6 +53,10 @@ const TONE_CLASS = {
 
 function summaryOf(event: TimelineEvent): string {
   const payload = event.payload;
+  // The note body lives in the Operator notes panel; repeating it here would
+  // duplicate the same paragraph twice on one screen. The ledger still records
+  // it in the payload, one click away.
+  if (event.event_type === "note") return "Operator note added";
   const status = payload.status ?? payload.to;
   if (typeof status === "string" && event.event_type === "incident.status_changed") {
     return `Status → ${titleCase(status)}`;
