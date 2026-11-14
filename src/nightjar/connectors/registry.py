@@ -97,7 +97,9 @@ def build_registry(settings: Settings) -> ConnectorRegistry:
             CloudflareConnector(settings.cloudflare_token, base_url=settings.cloudflare_api_url)
         )
     if settings.notify_webhook_url:
-        real.append(WebhookConnector(settings.notify_webhook_url))
+        real.append(
+            WebhookConnector(settings.notify_webhook_url, secret=settings.notify_webhook_secret)
+        )
 
     connectors: list[Connector] = list(real)
     if settings.lab_enabled:

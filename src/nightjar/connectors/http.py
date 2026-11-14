@@ -4,7 +4,7 @@ from typing import Any
 
 import httpx
 
-from nightjar.connectors.base import ConnectorError, ToolResult
+from nightjar.connectors.base import Capability, CapabilityReport, ConnectorError, ToolResult
 from nightjar.core.enums import ActionType, EvidenceKind
 from nightjar.core.models import ActionSpec
 from nightjar.core.verification import validate_url
@@ -23,6 +23,22 @@ class HttpConnector:
 
     async def execute(self, action: ActionSpec) -> dict[str, Any]:
         raise ConnectorError("http connector is read-only")
+
+    def capabilities(self) -> tuple[Capability, ...]:
+        # A read-only prober performs no action, so it advertises none.
+        return ()
+
+    async def preflight(self, *, deep: bool = False) -> CapabilityReport:
+        return CapabilityReport(
+            provider=self.name,
+            verdict="ok",
+            identity="read-only evidence prober",
+            detail=(
+                "private targets allowed (lab only)"
+                if self._allow_private
+                else "public targets only"
+            ),
+        )
 
     async def collect(self, tool: str, params: dict[str, Any]) -> ToolResult:
         if tool != "http.get":

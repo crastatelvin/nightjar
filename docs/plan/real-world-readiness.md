@@ -46,14 +46,14 @@ recorded incidents, one per class, with chain verification green.
 | Hash-chained evidence and timeline | Real | `tests/test_evidence.py`, chain endpoint |
 | `purge_cache`, `enable_under_attack` | Real HTTP | `connectors/cloudflare.py` |
 | `open_issue` | Real HTTP | `connectors/github.py` |
-| `notify` | Real HTTP, **unsigned** | `connectors/webhook.py` |
+| `notify` | Real HTTP, HMAC-signed when configured | `connectors/webhook.py` |
 | `http.get` probe | Real, SSRF-guarded | `connectors/http.py` |
-| `revoke_credential` | **Lab only** | `connectors/lab.py` |
+| `revoke_credential` (GitHub) | **Real HTTP**, proven by a 401 probe | `connectors/github.py` |
 | `quarantine_message`, `block_sender` | **Lab only** | `connectors/lab.py` |
 | `rollback_deployment`, `restart_service` | **Lab only** | `connectors/lab.py` |
-| Credential-liveness verification | **Missing** | `PredicateKind.CREDENTIAL` has no checker |
-| Capability discovery | **Missing** | No `doctor`, no capabilities endpoint |
-| Fail-closed production defaults | **Missing** | `lab_enabled=True`, `allow_private_probes=True` |
+| Credential-liveness verification | Real | `CredentialCheck`, `tests/test_github_revocation.py` |
+| Capability discovery | Real | `nightjarctl doctor`, `GET /v1/meta/capabilities` |
+| Fail-closed production defaults | Real | `Settings._refuse_unsafe_production` |
 | Multi-process safety | **Missing** | In-process `asyncio.Lock` only |
 | Real-model evaluation | **Missing** | All numbers are mock |
 | OIDC / RBAC / rate limits | **Missing** | One shared token, self-asserted actor |
@@ -1014,16 +1014,19 @@ Estimates are focused engineering hours, including tests and docs.
 
 ### Phase 6 — Production execution surface (P0)
 
+Status: ✅ shipped in this phase. 6.16 is half shipped — outbound notifications are
+signed, inbound signature verification on intake is not. Everything else is open.
+
 | ID | Task | Files | Acceptance | Est |
 |---|---|---|---|---|
-| 6.1 | Fail-closed `Settings` validator + production block in `.env.example` | `api/settings.py`, `.env.example`, `tests/test_settings.py` | production with lab/private/no-auth raises; dev unchanged | 4 |
+| 6.1 ✅ | Fail-closed `Settings` validator + production block in `.env.example` | `api/settings.py`, `.env.example`, `tests/test_settings.py` | production with lab/private/no-auth raises; dev unchanged | 4 |
 | 6.2 | Connector SDK v2: `Capability`, `ActionResult`, error taxonomy | `connectors/base.py`, `connectors/errors.py`, `tests/test_connector_base.py` | existing connectors migrate; registry returns `ActionResult` | 8 |
 | 6.3 | Idempotency table, key derivation, replay path | `api/tables.py`, `api/repository.py`, `connectors/idempotency.py`, migration | same action twice → one mutation; `replay=True` | 8 |
 | 6.4 | Per-provider token bucket + `Retry-After` handling | `connectors/ratelimit.py`, tests | 429 waits exactly `Retry-After`; no burst over budget | 5 |
-| 6.5 | `SecretVault`, `CredentialRef`, redaction registry | `core/secrets.py`, `core/redaction.py`, tests | raw secret absent from DB/log/evidence | 8 |
-| 6.6 | `nightjarctl doctor` + `GET /v1/meta/capabilities` | `cli/doctor.py`, `api/routers/meta.py`, `pyproject.toml`, tests | table renders; exit 0 only when all required ok | 10 |
-| 6.7 | GitHub revocation connector (3 modes) | `connectors/github.py`, tests | 202 recorded; probe 401 passes; 403 fails | 10 |
-| 6.8 | `CredentialCheck` + `PredicateKind.CREDENTIAL` wiring | `core/verification.py`, `api/service.py`, tests | revoked → pass, live → fail, 403 → fail | 6 |
+| 6.5 ✅ | `SecretVault`, `CredentialRef`, redaction registry | `core/secrets.py`, `core/redaction.py`, tests | raw secret absent from DB/log/evidence | 8 |
+| 6.6 ✅ | `nightjarctl doctor` + `GET /v1/meta/capabilities` | `cli/doctor.py`, `api/routers/meta.py`, `pyproject.toml`, tests | table renders; exit 0 only when all required ok | 10 |
+| 6.7 ✅ | GitHub revocation connector (3 modes) | `connectors/github.py`, tests | 202 recorded; probe 401 passes; 403 fails | 10 |
+| 6.8 ✅ | `CredentialCheck` + `PredicateKind.CREDENTIAL` wiring | `core/verification.py`, `api/service.py`, tests | revoked → pass, live → fail, 403 → fail | 6 |
 | 6.9 | Google Workspace connector: quarantine + filter | `connectors/google_workspace.py`, tests | label present/INBOX absent; filter read back | 14 |
 | 6.10 | Microsoft 365 connector: move + rule + revoke sessions | `connectors/microsoft365.py`, tests | new message id handled; rule read back | 16 |
 | 6.11 | Stripe assisted revocation (`MANUAL_STEP` + probe) | `connectors/stripe.py`, `core/actions.py`, UI | manual step visible; 401 passes; 403 fails | 8 |
@@ -1031,7 +1034,7 @@ Estimates are focused engineering hours, including tests and docs.
 | 6.13 | Vercel rollback + alias verification | `connectors/vercel.py`, tests | `READY`, alias present | 8 |
 | 6.14 | Render rollback/restart + autodeploy pause | `connectors/render.py`, tests | autodeploy off, deploy live | 8 |
 | 6.15 | Fly machine restart + wait | `connectors/fly.py`, tests | `started`, `updated_at` after request | 6 |
-| 6.16 | Webhook signing (outbound + inbound) | `connectors/webhook.py`, `api/routers/intake.py`, tests | bad signature 401; replay rejected | 6 |
+| 6.16 ◐ | Webhook signing (outbound + inbound) | `connectors/webhook.py`, `api/routers/intake.py`, tests | bad signature 401; replay rejected | 6 |
 | 6.17 | Managed target allowlist in policy + Rego parity | `core/policy.py`, `policies/nightjar.rego`, tests | unmanaged target denied in both engines | 8 |
 | 6.18 | Availability-aware planner + `ActionUnavailable` | `agents/prompts.py`, `core/actions.py`, tests | unavailable action rejected pre-policy | 6 |
 | 6.19 | Required-predicate enforcement per class | `core/actions.py`, `agents/prompts.py`, tests | missing predicate → plan rejected | 4 |

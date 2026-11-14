@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+import time
 from typing import Any
 
 import httpx
 
-from nightjar.connectors.base import ConnectorError, ToolResult
+from nightjar.connectors.base import Capability, CapabilityReport, ConnectorError, ToolResult
 from nightjar.core.enums import ActionType, EvidenceKind
 from nightjar.core.models import ActionSpec, VerificationPredicate
 from nightjar.core.secrets import (
@@ -146,6 +147,79 @@ class GitHubConnector:
             "hint": hint(raw),
             "note": "revocation accepted; liveness is proven by the verifier",
         }
+
+    def capabilities(self) -> tuple[Capability, ...]:
+        capabilities = [
+            Capability(
+                action_type=ActionType.REVOKE_CREDENTIAL,
+                provider=self.name,
+                target_kinds=("credential",),
+                notes="unauthenticated revocation API; GHES unsupported in v1",
+            )
+        ]
+        if self._token:
+            capabilities.append(
+                Capability(
+                    action_type=ActionType.OPEN_ISSUE,
+                    provider=self.name,
+                    target_kinds=("repository",),
+                )
+            )
+        return tuple(capabilities)
+
+    async def preflight(self, *, deep: bool = False) -> CapabilityReport:
+        """Prove the configured token, or that revocation-only mode is usable."""
+        if not self._token:
+            return CapabilityReport(
+                provider=self.name,
+                verdict="ok",
+                identity="unauthenticated revocation only",
+                detail="no token configured, so issue creation is unavailable",
+            )
+        started = time.monotonic()
+        try:
+            async with httpx.AsyncClient(timeout=15.0) as client:
+                response = await client.get(f"{self._base}/user", headers=self._headers())
+        except httpx.HTTPError as exc:
+            return CapabilityReport(
+                provider=self.name,
+                verdict="error",
+                detail=f"github unreachable: {exc}",
+                latency_ms=int((time.monotonic() - started) * 1000),
+            )
+        latency = int((time.monotonic() - started) * 1000)
+        if response.status_code == 401:
+            return CapabilityReport(
+                provider=self.name,
+                verdict="error",
+                detail="NIGHTJAR_GITHUB_TOKEN was rejected (401)",
+                latency_ms=latency,
+            )
+        if response.status_code == 403:
+            body = response.text[:200]
+            return CapabilityReport(
+                provider=self.name,
+                verdict="degraded",
+                detail=f"token accepted but forbidden (403): {body}",
+                missing_scopes=("issues:write",),
+                latency_ms=latency,
+            )
+        if response.status_code >= 400:
+            return CapabilityReport(
+                provider=self.name,
+                verdict="error",
+                detail=f"github returned {response.status_code}",
+                latency_ms=latency,
+            )
+        login = str(response.json().get("login", "unknown"))
+        scopes = response.headers.get("x-oauth-scopes", "")
+        return CapabilityReport(
+            provider=self.name,
+            verdict="ok",
+            identity=f"token:{login}",
+            detail=f"scopes: {scopes}" if scopes else "fine-grained token",
+            latency_ms=latency,
+        )
 
     async def collect(self, tool: str, params: dict[str, Any]) -> ToolResult:
         if tool != "github.repo_file":

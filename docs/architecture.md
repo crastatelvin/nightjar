@@ -44,6 +44,10 @@ that matters.
 - `evidence.py` — canonical JSON hashing, chain sealing, and verification.
 - `redaction.py` — secret and PII redaction before evidence is stored or sent
   to a model.
+- `secrets.py` — `env:` / `file:` vault references, fingerprints, and hints, so
+  a credential is referenced by an action but never stored with it.
+- `capabilities.py` — what each connector can do, what each v1 incident class
+  needs, and whether the gap is closed right now.
 
 ### Agent roles (`src/nightjar/agents`)
 
@@ -66,7 +70,19 @@ Connectors translate typed actions and probes into provider calls. The
 registry refuses ambiguous mappings, duplicate tool names, unknown read tools,
 and oversized parameters. `http` is read-only; `lab` is the synthetic
 environment; `github` and `cloudflare` are real adapters; `webhook` sends
-notifications.
+signed notifications.
+
+Each connector declares `capabilities()` — the actions it can really perform and
+the kinds of target they need — and implements `preflight()`, which answers "can
+you do your job right now?" with a verdict, an identity, and the scopes that are
+missing. `core/capabilities.py` turns those answers into a report: which actions
+have a healthy provider, which are missing, and therefore whether each v1
+incident class can actually be closed. `nightjarctl doctor` and
+`GET /v1/meta/capabilities` expose the same report.
+
+The lab connector never advertises an action that a configured real connector
+already implements, so a plan cannot name `connector: "lab"` to get a synthetic
+"revoked" result while the credential is still live at the provider.
 
 ### API (`src/nightjar/api`)
 
@@ -74,6 +90,12 @@ FastAPI application with bearer auth, CORS, health/readiness, incident CRUD,
 case file, timeline, SSE stream, chain verification, notes, retry,
 verify-now, approvals, and meta. `IncidentService` is the single orchestrator
 used by both the inline pipeline and Temporal activities.
+
+### Operator CLI (`src/nightjar/cli`)
+
+`nightjarctl doctor` probes every configured provider, prints the capability
+table, and exits non-zero when a v1 incident class has no healthy provider.
+`--json` is for CI, `--deep` also sends one signed webhook ping.
 
 ### Worker (`src/nightjar/worker`)
 

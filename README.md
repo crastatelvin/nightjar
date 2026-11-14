@@ -122,6 +122,30 @@ nightjar-lab --port 8100
 NIGHTJAR_STABILITY_SECONDS=30 nightjar-api   # http://127.0.0.1:8000
 ```
 
+Before you trust a deployment, ask it what it can actually do:
+
+```bash
+nightjarctl doctor
+```
+
+```
+provider     verdict    identity                           detail
+------------ ---------- ---------------------------------- ----------------------------------------
+lab          ok         cornershop synthetic environment   all v1 scenarios are exercisable
+http         ok         read-only evidence prober          private targets allowed (lab only)
+
+action                 provider     mode     verdict
+---------------------- ------------ -------- --------------------
+purge_cache            lab          auto     ok
+...
+OK: every v1 incident class can be closed and verified.
+```
+
+It exits non-zero and names each missing action when an incident class has no healthy
+provider, so CI and a pre-deployment check can fail on it. `--json` is for machines,
+`--deep` also sends one signed ping to the notification webhook. The same data is at
+`GET /v1/meta/capabilities`.
+
 The quickstart uses a 30-second stability window so the whole loop resolves while you
 watch. The production default is 900 seconds; set `NIGHTJAR_STABILITY_SECONDS` to match
 how long your fix needs to hold before you will call it resolved.
@@ -263,13 +287,17 @@ Real and exercised end to end:
   (HTTP status, JSON path, DNS, TLS) against any URL you configure;
 - Cloudflare cache purge and under-attack, GitHub issue creation, and webhook notify
   as typed, non-simulated operations;
+- GitHub credential revocation, verified by presenting the token and requiring a `401`:
+  a `202` from GitHub only means the request was queued, so it is never treated as proof;
+- `nightjarctl doctor` and `GET /v1/meta/capabilities`, which report per action which
+  provider can really do it and whether that provider is healthy right now;
 - the API, SSE stream, UI, standalone image, and CI.
 
 Not yet real:
 
-- credential revocation, message quarantine, sender blocking, deployment rollback, and
-  service restart have **no production connector**; they run against the lab only, so a
-  real exposed-credential or phishing incident cannot be remediated end to end yet.
+- message quarantine, sender blocking, deployment rollback, and service restart have
+  **no production connector**; they run against the lab only, so a real phishing
+  incident cannot be remediated end to end yet.
   [docs/plan/real-world-readiness.md](docs/plan/real-world-readiness.md) is the work
   order that closes this, including the one case that cannot be automated: Stripe has
   no public API to expire a secret key, so Nightjar proves the key is dead after a
@@ -280,9 +308,12 @@ Not yet real:
   limiting;
 - one API process is the only safe topology: the stability scheduler and per-incident
   locks are in-process, so replicas would double-run checks;
-- safe-by-default settings: the lab connector and private probes are on unless you turn
-  them off, so a production deployment must set `NIGHTJAR_LAB_ENABLED=false`,
-  `NIGHTJAR_ALLOW_PRIVATE_PROBES=false`, and a token explicitly.
+- targets are not yet restricted to an allowlist, so `NIGHTJAR_MANAGED_TARGETS` is
+  required in production but not enforced by policy. That is the next slice.
+
+Production is fail-closed at startup: with `NIGHTJAR_ENVIRONMENT=production` the process
+refuses to boot with the lab connector on, private probes allowed, no bearer token or
+OIDC issuer, no managed targets, or a stability window under 60 seconds.
 
 ## Contributing
 

@@ -55,6 +55,7 @@ nightjar-api = "nightjar.api.main:run"
 nightjar-worker = "nightjar.worker.main:run"
 nightjar-lab = "nightjar.lab.cli:main"
 nightjar-eval = "nightjar.evals.cli:main"
+nightjarctl = "nightjar.cli.doctor:main"
 
 [project.urls]
 Homepage = "https://github.com/crastatelvin/nightjar"
@@ -83,6 +84,7 @@ ignore = ["S101", "B008", "RUF012"]
 "scripts/**" = ["T201"]
 "src/nightjar/evals/**" = ["T201"]
 "src/nightjar/lab/cli.py" = ["T201"]
+"src/nightjar/cli/**" = ["T201"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["nightjar"]

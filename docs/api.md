@@ -36,6 +36,35 @@ endpoints are unauthenticated so orchestrators can probe them. Errors use
 }
 ```
 
+### `GET /v1/meta/capabilities`
+
+Query: `probe=true|false` (default `true`). With `probe=true` each configured
+provider is asked whether it can work right now; the result is cached for 30
+seconds. With `probe=false` nothing touches the network and every action is
+reported as `configured`, not `ok`.
+
+```json
+{
+  "ok": true,
+  "environment": "production",
+  "probed": true,
+  "providers": [
+    {"provider": "github", "verdict": "ok", "identity": "token:nightjar-bot",
+     "detail": "scopes: repo", "missing_scopes": [], "latency_ms": 142}
+  ],
+  "actions": [
+    {"action_type": "revoke_credential", "provider": "github", "automated": true,
+     "target_kinds": ["credential"], "notes": "…", "verdict": "ok"}
+  ],
+  "missing": ["quarantine_message", "block_sender"],
+  "problems": ["no healthy provider for quarantine_message"]
+}
+```
+
+`ok` is false when any provider fails its preflight or any action required by a v1
+incident class has no healthy provider. `nightjarctl doctor` prints the same
+report and exits with the same verdict.
+
 ## Incidents
 
 ### `POST /v1/incidents`

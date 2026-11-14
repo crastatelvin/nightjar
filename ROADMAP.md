@@ -120,26 +120,27 @@ Performance and motion requirements:
 The full work order, with endpoints, scopes, verification predicates, file paths,
 tests, and estimates, is [docs/plan/real-world-readiness.md](docs/plan/real-world-readiness.md).
 
-The gap is execution, not orchestration. Five of the ten action types exist only
-in the lab, so an exposed credential or a phishing report can be investigated and
+The gap is execution, not orchestration. Five of the ten action types still exist
+only in the lab, so a phishing report or a bad deploy can be investigated and
 planned but not fixed. This phase makes each one real, or marks it as a manual
 step that is still verified.
 
-1. **Safe defaults.** Production refuses the lab connector, private probes, a
+1. **Safe defaults.** ✅ Production refuses the lab connector, private probes, a
    missing token, an empty target allowlist, and a short stability window.
-2. **Connector SDK v2.** Capability report, typed errors, local idempotency,
-   per-provider rate limits, secret references instead of raw values.
-3. **Credential revocation.** GitHub PAT/OAuth/App tokens, Google OAuth tokens,
-   Microsoft sign-in sessions. Stripe has no public revoke API, so it becomes a
-   manual step whose completion is proven by a `401` probe.
+2. **Connector SDK v2.** Capability report is live; typed errors, local
+   idempotency, per-provider rate limits, and the redaction registry are open.
+3. **Credential revocation.** ✅ GitHub PAT/OAuth/App tokens via the
+   unauthenticated revocation API, proven dead by a `401` probe. Google OAuth
+   and Microsoft sessions are open. Stripe has no public revoke API, so it
+   becomes a manual step whose completion is proven by a `401` probe.
 4. **Mail containment.** Google Workspace labels and filters; Microsoft 365
    message move, inbox rules, and session revocation.
 5. **Deploy and runtime.** Cloudflare Pages, Vercel, and Render rollback; Fly and
    Render restart. Render rollback also pauses autodeploy, or the next push
    undoes it.
-6. **Capability probe.** `nightjarctl doctor` and `GET /v1/meta/capabilities` so
-   an operator sees which providers are live and which scopes are missing before
-   an incident.
+6. **Capability probe.** ✅ `nightjarctl doctor` and `GET /v1/meta/capabilities`
+   so an operator sees which providers are live and which scopes are missing
+   before an incident.
 7. **Managed targets.** A policy-enforced allowlist of zones, repos, mailboxes,
    projects, and apps. The model may name a target; it may not invent one.
 

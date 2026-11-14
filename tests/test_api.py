@@ -28,6 +28,26 @@ def test_meta_lists_the_typed_catalog(client: TestClient) -> None:
     assert "transfer_money" not in meta["action_catalog"]
 
 
+def test_capabilities_probe_reports_a_working_lab(client: TestClient) -> None:
+    payload = client.get("/v1/meta/capabilities").json()
+    assert payload["ok"] is True
+    assert payload["probed"] is True
+    assert {item["provider"] for item in payload["providers"]} == {"lab", "http"}
+    actions = {item["action_type"]: item for item in payload["actions"]}
+    assert actions["purge_cache"]["verdict"] == "ok"
+    assert actions["quarantine_message"]["provider"] == "lab"
+    assert actions["revoke_credential"]["automated"] is True
+    assert payload["missing"] == []
+
+
+def test_capabilities_without_probing_claims_only_configuration(client: TestClient) -> None:
+    payload = client.get("/v1/meta/capabilities", params={"probe": "false"}).json()
+    assert payload["probed"] is False
+    assert payload["providers"] == []
+    assert {item["verdict"] for item in payload["actions"]} == {"configured"}
+    assert payload["missing"] == []
+
+
 def test_bearer_auth_is_enforced(settings: Settings) -> None:
     secured = settings.model_copy(update={"api_token": "correct-horse"})
     app = create_app(secured)

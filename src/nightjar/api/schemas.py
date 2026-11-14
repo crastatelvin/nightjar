@@ -103,8 +103,38 @@ class MetaInfo(BaseModel):
     action_catalog: dict[str, str]
 
 
+class ProviderHealth(BaseModel):
+    provider: str
+    verdict: str
+    identity: str = ""
+    detail: str = ""
+    missing_scopes: list[str] = Field(default_factory=list)
+    latency_ms: int | None = None
+
+
+class ActionCapabilityView(BaseModel):
+    action_type: str
+    provider: str
+    automated: bool
+    target_kinds: list[str] = Field(default_factory=list)
+    notes: str = ""
+    verdict: str
+
+
+class CapabilitiesResponse(BaseModel):
+    ok: bool
+    environment: str
+    probed: bool
+    providers: list[ProviderHealth]
+    actions: list[ActionCapabilityView]
+    missing: list[str]
+    problems: list[str]
+
+
 __all__ = [
+    "ActionCapabilityView",
     "ApprovalDecision",
+    "CapabilitiesResponse",
     "CaseFileResponse",
     "ChainStatus",
     "IncidentCreate",
@@ -112,5 +142,6 @@ __all__ = [
     "IncidentListItem",
     "MetaInfo",
     "NoteCreate",
+    "ProviderHealth",
     "TimelineList",
 ]

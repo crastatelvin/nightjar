@@ -220,6 +220,11 @@ jobs:
           tail -40 "$RUNNER_TEMP/lab.log" "$RUNNER_TEMP/api.log"
           exit 1
 
+      - name: Capability doctor
+        run: uv run nightjarctl doctor --json
+        env:
+          NIGHTJAR_LAB_BASE_URL: http://127.0.0.1:8100
+
       - uses: actions/setup-node@v4
         with:
           node-version: "24"

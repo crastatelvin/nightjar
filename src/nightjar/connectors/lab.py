@@ -1,14 +1,32 @@
 from __future__ import annotations
 
+import time
 from collections.abc import Iterable
 from typing import Any
 
 import httpx
 
-from nightjar.connectors.base import CheckFn, ConnectorError, ToolResult
+from nightjar.connectors.base import (
+    Capability,
+    CapabilityReport,
+    CheckFn,
+    ConnectorError,
+    ToolResult,
+)
 from nightjar.core.actions import ACTION_RISK
 from nightjar.core.enums import ActionType, EvidenceKind
 from nightjar.core.models import ActionSpec, VerificationPredicate
+
+_LAB_TARGETS: dict[ActionType, tuple[str, ...]] = {
+    ActionType.PURGE_CACHE: ("zone",),
+    ActionType.ENABLE_UNDER_ATTACK: ("zone",),
+    ActionType.REVOKE_CREDENTIAL: ("credential",),
+    ActionType.QUARANTINE_MESSAGE: ("mailbox", "message"),
+    ActionType.BLOCK_SENDER: ("mailbox", "sender"),
+    ActionType.ROLLBACK_DEPLOYMENT: ("service", "deployment"),
+    ActionType.RESTART_SERVICE: ("service",),
+    ActionType.PROBE: ("url",),
+}
 
 
 class LabConnector:
@@ -188,6 +206,39 @@ class LabConnector:
                 content=await self._json("GET", f"/lab/mail/{message_id}/reputation"),
             )
         raise ConnectorError(f"unknown lab tool {tool}")
+
+    def capabilities(self) -> tuple[Capability, ...]:
+        return tuple(
+            Capability(
+                action_type=action,
+                provider=self.name,
+                target_kinds=_LAB_TARGETS[action],
+                notes="synthetic CornerShop; not a production provider",
+            )
+            for action in sorted(self.action_types, key=lambda item: item.value)
+        )
+
+    async def preflight(self, *, deep: bool = False) -> CapabilityReport:
+        started = time.monotonic()
+        try:
+            response = await self._request("GET", "/lab/state")
+        except ConnectorError as exc:
+            return CapabilityReport(provider=self.name, verdict="error", detail=str(exc))
+        latency = int((time.monotonic() - started) * 1000)
+        if response.status_code != 200:
+            return CapabilityReport(
+                provider=self.name,
+                verdict="error",
+                detail=f"lab returned {response.status_code}",
+                latency_ms=latency,
+            )
+        return CapabilityReport(
+            provider=self.name,
+            verdict="ok",
+            identity="cornershop synthetic environment",
+            detail="all v1 scenarios are exercisable",
+            latency_ms=latency,
+        )
 
     def verification_checks(self) -> dict[str, CheckFn]:
         async def credential_revoked(predicate: VerificationPredicate) -> dict[str, Any]:
