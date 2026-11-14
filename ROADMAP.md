@@ -127,8 +127,9 @@ step that is still verified.
 
 1. **Safe defaults.** ✅ Production refuses the lab connector, private probes, a
    missing token, an empty target allowlist, and a short stability window.
-2. **Connector SDK v2.** Capability report is live; typed errors, local
-   idempotency, per-provider rate limits, and the redaction registry are open.
+2. **Connector SDK v2.** ✅ Capability report and an availability-aware planner;
+   typed errors, local idempotency, per-provider rate limits, and the redaction
+   registry are open.
 3. **Credential revocation.** ✅ GitHub PAT/OAuth/App tokens via the
    unauthenticated revocation API, proven dead by a `401` probe. Google OAuth
    and Microsoft sessions are open. Stripe has no public revoke API, so it

@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 
 from nightjar.connectors.base import Capability, CapabilityReport, Connector
 from nightjar.core.enums import ActionType, IncidentClass
+from nightjar.core.models import ActionSpec
 
 # What the v1 incident classes need in order to be closed without a human
 # improvising. A class is only "supported" when every action here has a healthy
@@ -163,3 +164,43 @@ def assess(
         problems=problems,
         environment=environment,
     )
+
+
+def available_actions(connectors: list[Connector]) -> list[ActionCapability]:
+    """The catalogue the planner is allowed to choose from."""
+    index = collect_capabilities(connectors)
+    catalogue: list[ActionCapability] = []
+    for action_type, capabilities in sorted(index.items(), key=lambda item: item[0].value):
+        for capability in capabilities:
+            catalogue.append(
+                ActionCapability(
+                    action_type=action_type,
+                    provider=capability.provider,
+                    automated=capability.automated,
+                    target_kinds=capability.target_kinds,
+                    notes=capability.notes,
+                    verdict="configured",
+                )
+            )
+    return catalogue
+
+
+def unavailable_actions(actions: list[ActionSpec], connectors: list[Connector]) -> list[str]:
+    """Name every planned action this deployment cannot perform at all.
+
+    This runs before approval, so an operator is never asked to approve a fix
+    that would fail at the provider. Health is a separate question: doctor
+    answers that, and the allowlist answers where an action may land.
+    """
+    index = collect_capabilities(connectors)
+    problems: list[str] = []
+    for action in actions:
+        capabilities = index.get(action.action_type, [])
+        requested = action.params.get("connector")
+        if not capabilities:
+            problems.append(f"{action.action_type.value}: no connector implements it")
+        elif requested and not any(item.provider == requested for item in capabilities):
+            problems.append(
+                f"{action.action_type.value}: connector {requested!r} does not implement it"
+            )
+    return problems

@@ -260,3 +260,43 @@ def test_system_prompts_treat_external_content_as_data() -> None:
     assert "not instructions" in INVESTIGATOR_SYSTEM.lower()
     assert "not on the investigator's team" in CRITIC_SYSTEM
     assert "shell command" in PLANNER_SYSTEM
+
+
+def test_the_plan_prompt_lists_only_what_the_deployment_can_do() -> None:
+    from nightjar.agents.prompts import capabilities_block, plan_prompt
+    from nightjar.core.capabilities import ActionCapability
+
+    payload = PlanInput(
+        incident=incident(),
+        triage=TriageResult(
+            incident_class=IncidentClass.SITE_OUTAGE,
+            severity=Severity.HIGH,
+            title="Checkout is down",
+            confidence=0.9,
+            summary="cache poisoned",
+        ),
+        environment=Environment(),
+        capabilities=[
+            ActionCapability(
+                action_type=ActionType.PURGE_CACHE,
+                provider="cloudflare",
+                automated=True,
+                target_kinds=("zone",),
+                notes="purge by URL",
+                verdict="configured",
+            )
+        ],
+    )
+    rendered = plan_prompt(payload)
+    assert "<capabilities>" in rendered
+    assert "purge_cache" in rendered
+    assert "cloudflare" in rendered
+    # Actions no connector implements must not appear as choices.
+    assert "restart_service" not in rendered
+
+    assert "no connector is configured" in capabilities_block([])
+
+
+def test_the_planner_is_told_to_admit_a_missing_capability() -> None:
+    assert "<capabilities>" in PLANNER_SYSTEM
+    assert "missing capability" in PLANNER_SYSTEM

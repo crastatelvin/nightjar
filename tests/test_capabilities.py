@@ -12,7 +12,8 @@ from nightjar.core.capabilities import (
     collect_capabilities,
     required_actions,
 )
-from nightjar.core.enums import ActionType, IncidentClass
+from nightjar.core.enums import ActionType, IncidentClass, RiskClass
+from nightjar.core.models import ActionSpec
 
 
 def lab() -> LabConnector:
@@ -122,3 +123,53 @@ def test_the_report_is_json_safe() -> None:
     assert payload["ok"] is True
     assert payload["providers"][0]["provider"] == "lab"  # type: ignore[index]
     assert payload["actions"][0]["target_kinds"] is not None  # type: ignore[index]
+
+
+def test_the_planner_catalogue_lists_configured_actions() -> None:
+    from nightjar.core.capabilities import available_actions
+
+    catalogue = available_actions([lab(), HttpConnector()])
+    assert {item.action_type for item in catalogue} >= {
+        ActionType.PURGE_CACHE,
+        ActionType.REVOKE_CREDENTIAL,
+        ActionType.QUARANTINE_MESSAGE,
+    }
+    assert {item.verdict for item in catalogue} == {"configured"}
+
+
+def test_a_plan_for_an_unimplemented_action_is_named() -> None:
+    from nightjar.core.capabilities import unavailable_actions
+
+    action = ActionSpec(
+        action_type=ActionType.OPEN_ISSUE,
+        target="acme/site",
+        params={"repository": "acme/site"},
+        risk=RiskClass.R1,
+    )
+    assert unavailable_actions([action], [lab()]) == ["open_issue: no connector implements it"]
+
+
+def test_a_named_connector_must_implement_the_action() -> None:
+    from nightjar.core.capabilities import unavailable_actions
+
+    action = ActionSpec(
+        action_type=ActionType.PURGE_CACHE,
+        target="cornershop",
+        params={"connector": "cloudflare", "zone": "cornershop"},
+        risk=RiskClass.R1,
+    )
+    assert unavailable_actions([action], [lab()]) == [
+        "purge_cache: connector 'cloudflare' does not implement it"
+    ]
+
+
+def test_an_available_plan_is_clean() -> None:
+    from nightjar.core.capabilities import unavailable_actions
+
+    action = ActionSpec(
+        action_type=ActionType.PURGE_CACHE,
+        target="cornershop",
+        params={"connector": "lab", "zone": "cornershop"},
+        risk=RiskClass.R1,
+    )
+    assert unavailable_actions([action], [lab()]) == []

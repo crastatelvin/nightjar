@@ -157,3 +157,42 @@ def test_a_managed_target_is_executed_normally(settings: Settings, lab) -> None:
 
     assert case["incident"]["status"] == "resolved"
     assert lab.get("/lab/audit").json()["healthy"] is True
+
+
+@pytest.mark.integration
+def test_a_plan_for_an_unimplemented_action_fails_before_approval(settings: Settings, lab) -> None:
+    from nightjar.agents.mock import MockAgentRuntime
+    from nightjar.agents.types import AgentOutcome
+    from nightjar.api.main import build_service
+    from nightjar.api.main import create_app as make_app
+    from nightjar.core.enums import ActionType
+    from nightjar.core.models import ActionPlan
+
+    class UnavailablePlanner(MockAgentRuntime):
+        async def plan(self, payload):  # type: ignore[no-untyped-def]
+            outcome = await super().plan(payload)
+            plan: ActionPlan = outcome.output
+            actions = [
+                item.model_copy(update={"action_type": ActionType.OPEN_ISSUE, "params": {}})
+                for item in plan.actions
+            ]
+            return AgentOutcome(
+                output=plan.model_copy(update={"actions": actions}),
+                provider=outcome.provider,
+                model=outcome.model,
+            )
+
+    service = build_service(settings)
+    service.runtime = UnavailablePlanner()
+    app = make_app(settings, service=service)
+    with TestClient(app) as client:
+        payload = scenario_payload(lab, "site_cache_poisoned")
+        incident = submit(client, payload)
+        case = wait_for_status(client, incident["id"], {"failed"})
+
+    assert case["incident"]["status"] == "failed"
+    assert "cannot perform" in case["incident"]["summary"]
+    assert "open_issue" in case["incident"]["summary"]
+    # No plan was ever approved or executed.
+    assert case["approvals"] == []
+    assert lab.get("/lab/audit").json()["healthy"] is False

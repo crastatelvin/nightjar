@@ -5,6 +5,7 @@ from typing import Any, Protocol
 
 from pydantic import BaseModel, Field
 
+from nightjar.core.capabilities import ActionCapability
 from nightjar.core.enums import IncidentClass, Severity
 from nightjar.core.models import (
     ActionPlan,
@@ -63,6 +64,10 @@ class PlanInput(BaseModel):
     critique: Critique | None = None
     evidence: list[EvidenceItem] = Field(default_factory=list)
     environment: Environment
+    # Only what this deployment can really do. A planner that is not told this
+    # will propose a fix no connector implements, and the incident fails later
+    # instead of at plan time.
+    capabilities: list[ActionCapability] = Field(default_factory=list)
 
 
 @dataclass

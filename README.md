@@ -295,6 +295,9 @@ Real and exercised end to end:
   destination;
 - `nightjarctl doctor` and `GET /v1/meta/capabilities`, which report per action which
   provider can really do it and whether that provider is healthy right now;
+- an availability-aware planner: the prompt lists only the actions this deployment
+  implements, and a plan naming anything else fails before an operator is asked to
+  approve it;
 - the API, SSE stream, UI, standalone image, and CI.
 
 Not yet real:

@@ -27,6 +27,7 @@ from nightjar.api.settings import Settings
 from nightjar.connectors.base import ConnectorError, ToolResult
 from nightjar.connectors.registry import ConnectorRegistry
 from nightjar.core.actions import ActionValidationError, validate_plan
+from nightjar.core.capabilities import available_actions, unavailable_actions
 from nightjar.core.enums import (
     ActionStatus,
     ApprovalStatus,
@@ -502,10 +503,19 @@ class IncidentService:
                 critique=bundle.critique,
                 evidence=bundle.evidence,
                 environment=self._environment(incident),
+                capabilities=available_actions(self.registry.connectors),
             )
         )
         await self._record_agent(incident.id, "planner", outcome)
         plan: ActionPlan = outcome.output
+        unavailable = unavailable_actions(plan.actions, self.registry.connectors)
+        if unavailable:
+            await self._fail(
+                incident.id,
+                "planner proposed actions this deployment cannot perform: "
+                + "; ".join(unavailable),
+            )
+            return None
         if not plan.actions:
             await self._fail(
                 incident.id,

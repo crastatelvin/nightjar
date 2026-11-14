@@ -1015,8 +1015,7 @@ Estimates are focused engineering hours, including tests and docs.
 ### Phase 6 — Production execution surface (P0)
 
 Status: ✅ shipped in this phase. 6.16 is half shipped — outbound notifications are
-signed, inbound signature verification on intake is not. 6.18 (availability-aware
-planner) is open. Everything else is open.
+signed, inbound signature verification on intake is not. Everything else is open.
 
 | ID | Task | Files | Acceptance | Est |
 |---|---|---|---|---|
@@ -1037,7 +1036,7 @@ planner) is open. Everything else is open.
 | 6.15 | Fly machine restart + wait | `connectors/fly.py`, tests | `started`, `updated_at` after request | 6 |
 | 6.16 ◐ | Webhook signing (outbound + inbound) | `connectors/webhook.py`, `api/routers/intake.py`, tests | bad signature 401; replay rejected | 6 |
 | 6.17 ✅ | Managed target allowlist in policy + Rego parity | `core/policy.py`, `policies/nightjar.rego`, tests | unmanaged target denied in both engines | 8 |
-| 6.18 | Availability-aware planner + `ActionUnavailable` | `agents/prompts.py`, `core/actions.py`, tests | unavailable action rejected pre-policy | 6 |
+| 6.18 ✅ | Availability-aware planner + `ActionUnavailable` | `agents/prompts.py`, `core/actions.py`, tests | unavailable action rejected pre-policy | 6 |
 | 6.19 | Required-predicate enforcement per class | `core/actions.py`, `agents/prompts.py`, tests | missing predicate → plan rejected | 4 |
 | 6.20 | Manual-step API + case-file panel | `api/routers/incidents.py`, `apps/web/components/case/*` | manual action blocks resolution until attested | 10 |
 

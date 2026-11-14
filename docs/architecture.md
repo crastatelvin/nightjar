@@ -57,7 +57,9 @@ Four roles, each with a typed input and output:
 2. **Investigator** — cites evidence, requests bounded read-only probes, and
    forms findings.
 3. **Critic** — independently checks every claim against the evidence ledger.
-4. **Planner** — proposes typed actions and verification predicates.
+4. **Planner** — proposes typed actions and verification predicates. Its prompt
+   carries the deployment's real capability catalogue, and a plan naming an
+   action no connector implements fails before approval, not at the provider.
 
 `MockAgentRuntime` is a deterministic rules-based implementation used by CI and
 the evaluation baseline. `PydanticAgentRuntime` wraps PydanticAI V2 and
