@@ -140,6 +140,20 @@ run without OPA. Rules:
 No evidence, confidence below 0.50, or an active change freeze denies every
 mutating action. Denied actions do not report approval reasons or rules.
 
+### Managed targets
+
+Every action is resolved to a provider, a target kind, and a target value
+(`core/targets.py`): a cache purge lands on `cloudflare/zones/<zone>`, an issue
+on `github/repos/<owner>/<repo>`, a message on `google/mailboxes/<address>`.
+Policy denies the action unless `NIGHTJAR_MANAGED_TARGETS` contains that
+provider and value (or `"*"` for that kind). Revocation and notification have no
+destination of their own, so the provider entry alone is enough.
+
+Both engines implement the same rule and the same reason string; parity is
+tested with allow, deny, wildcard, provider-only, and empty-target cases. An
+empty allowlist means unmanaged development mode, and production refuses to
+start that way.
+
 ## Safety invariants
 
 1. Models cannot execute; only the executor does, and only through typed
@@ -155,6 +169,8 @@ mutating action. Denied actions do not report approval reasons or rules.
 7. The executor and investigator are separate roles; the critic is independent
    of the investigator.
 8. Policy failures and engine errors deny.
+9. No action can reach a provider, zone, repository, mailbox, project, or app
+   that is not in the operator's allowlist.
 
 ## Data model
 

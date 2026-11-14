@@ -51,6 +51,22 @@ class Settings(BaseSettings):
             return [part.strip() for part in text.split(",") if part.strip()]
         return value
 
+    @field_validator("managed_targets", mode="before")
+    @classmethod
+    def parse_managed_targets(cls, value: Any) -> Any:
+        """Accept a JSON object, or an empty string meaning "unmanaged"."""
+        if value is None:
+            return {}
+        if isinstance(value, str):
+            text = value.strip()
+            if not text:
+                return {}
+            parsed = json.loads(text)
+            if not isinstance(parsed, dict):
+                raise ValueError("managed_targets must be a JSON object keyed by provider")
+            return parsed
+        return value
+
     orchestrator: Literal["inline", "temporal"] = "inline"
     temporal_address: str = "127.0.0.1:7233"
     temporal_namespace: str = "default"
@@ -91,7 +107,9 @@ class Settings(BaseSettings):
     # Targets the agent may touch, keyed by provider. Policy denies anything
     # outside this list, so a prompt-injected plan cannot name its own zone,
     # repository, mailbox, project, or app. Required in production.
-    managed_targets: dict[str, Any] = Field(default_factory=dict)
+    managed_targets: Annotated[dict[str, dict[str, list[str]]], NoDecode] = Field(
+        default_factory=dict
+    )
 
     otel_enabled: bool = False
     otel_endpoint: str | None = None

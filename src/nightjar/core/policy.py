@@ -9,6 +9,13 @@ from pydantic import BaseModel, Field
 from nightjar.core.actions import ActionValidationError, risk_for, validate_action
 from nightjar.core.enums import Decision, IncidentClass, RiskClass, Severity
 from nightjar.core.models import ActionSpec, PolicyResult
+from nightjar.core.targets import (
+    TARGET_DENIED_REASON,
+    TARGET_DENIED_RULE,
+    ManagedTargets,
+    ResolvedTarget,
+    target_allowed,
+)
 
 log = logging.getLogger(__name__)
 
@@ -24,6 +31,21 @@ class PolicyContext(BaseModel):
     change_freeze: bool = False
     approvals_granted: int = Field(default=0, ge=0)
     break_glass: bool = False
+    # An empty allowlist means unmanaged development mode. Production refuses
+    # to start that way, so a real deployment always takes the strict branch.
+    managed_targets: ManagedTargets = Field(default_factory=dict)
+    target_provider: str | None = None
+    target_kind: str | None = None
+    target_value: str | None = None
+
+    def resolved_target(self) -> ResolvedTarget | None:
+        if self.target_provider is None:
+            return None
+        return ResolvedTarget(
+            provider=self.target_provider,
+            kind=self.target_kind,
+            value=self.target_value,
+        )
 
 
 class PolicyRequest(BaseModel):
@@ -88,6 +110,10 @@ class LocalPolicyEngine:
 
         if action.risk is RiskClass.R0:
             return _result(Decision.ALLOW, action, [], ["read_only_allow"], 0, "local")
+
+        if not target_allowed(ctx.resolved_target(), ctx.managed_targets):
+            reasons.append(TARGET_DENIED_REASON)
+            rules.append(TARGET_DENIED_RULE)
 
         if ctx.evidence_count == 0:
             reasons.append("no evidence has been collected")

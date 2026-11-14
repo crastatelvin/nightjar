@@ -57,6 +57,7 @@ from nightjar.core.models import (
 from nightjar.core.policy import LocalPolicyEngine, PolicyContext, PolicyEngine, PolicyRequest
 from nightjar.core.redaction import redact_secrets, redact_secrets_obj, redact_text
 from nightjar.core.secrets import EnvVault
+from nightjar.core.targets import normalize_managed_targets, resolve_target
 from nightjar.core.verification import ConnectorCheck, CredentialCheck, Verifier
 
 log = logging.getLogger(__name__)
@@ -115,6 +116,7 @@ class IncidentService:
         self._locks: dict[str, asyncio.Lock] = {}
         self._tasks: set[asyncio.Task[None]] = set()
         self._closed = False
+        self._managed_targets = normalize_managed_targets(settings.managed_targets)
 
     # ------------------------------------------------------------------ intake
     async def intake(
@@ -534,6 +536,7 @@ class IncidentService:
         denied: list[tuple[ActionSpec, PolicyResult]] = []
         approvals: list[tuple[ActionSpec, Any]] = []
         for action in plan.actions:
+            target = resolve_target(action)
             request = PolicyRequest(
                 action=action,
                 context=PolicyContext(
@@ -544,6 +547,10 @@ class IncidentService:
                     confidence=plan.confidence,
                     evidence_count=len(bundle.evidence),
                     blast_radius=len(plan.blast_radius),
+                    managed_targets=self._managed_targets,
+                    target_provider=target.provider if target else None,
+                    target_kind=target.kind if target else None,
+                    target_value=target.value if target else None,
                 ),
             )
             try:

@@ -141,8 +141,9 @@ step that is still verified.
 6. **Capability probe.** ✅ `nightjarctl doctor` and `GET /v1/meta/capabilities`
    so an operator sees which providers are live and which scopes are missing
    before an incident.
-7. **Managed targets.** A policy-enforced allowlist of zones, repos, mailboxes,
-   projects, and apps. The model may name a target; it may not invent one.
+7. **Managed targets.** ✅ A policy-enforced allowlist of zones, repos, mailboxes,
+   projects, and apps, identical in the local and Rego engines. The model may name
+   a target; it may not invent one.
 
 ### Phase 7 — Multi-process and identity
 

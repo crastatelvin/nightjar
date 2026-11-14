@@ -126,3 +126,34 @@ def test_relapse_is_not_reported_as_resolved_even_briefly(settings: Settings, la
             time.sleep(0.1)
         assert "resolved" not in seen
         assert "reopened" in seen
+
+
+@pytest.mark.integration
+def test_a_plan_cannot_touch_an_unmanaged_target(settings: Settings, lab) -> None:
+    managed = settings.model_copy(
+        update={"managed_targets": {"cloudflare": {"zones": ["some-other-zone"]}}}
+    )
+    app = create_app(managed)
+    with TestClient(app) as client:
+        payload = scenario_payload(lab, "site_cache_poisoned")
+        incident = submit(client, payload)
+        case = wait_for_status(client, incident["id"], {"failed"})
+
+    assert case["incident"]["status"] == "failed"
+    assert "target is not in NIGHTJAR_MANAGED_TARGETS" in case["incident"]["summary"]
+    assert set(case["action_states"].values()) == {"denied"}
+    # Nothing was executed: the cache is still poisoned.
+    assert lab.get("/lab/audit").json()["healthy"] is False
+
+
+@pytest.mark.integration
+def test_a_managed_target_is_executed_normally(settings: Settings, lab) -> None:
+    managed = settings.model_copy(update={"managed_targets": {"lab": {"zones": ["cornershop"]}}})
+    app = create_app(managed)
+    with TestClient(app) as client:
+        payload = scenario_payload(lab, "site_cache_poisoned")
+        incident = submit(client, payload)
+        case = wait_for_status(client, incident["id"], {"resolved"})
+
+    assert case["incident"]["status"] == "resolved"
+    assert lab.get("/lab/audit").json()["healthy"] is True

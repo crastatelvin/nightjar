@@ -165,6 +165,79 @@ CASES = [
         ),
         context(approvals_granted=1),
     ),
+    # --- managed targets: the same action, one managed zone and one not.
+    (
+        ActionSpec(
+            action_type=ActionType.PURGE_CACHE,
+            target="zone-1",
+            params={"zone": "zone-1", "urls": ["https://example.com"]},
+            risk=RiskClass.R1,
+        ),
+        context(
+            managed_targets={"cloudflare": {"zones": ["zone-1"]}},
+            target_provider="cloudflare",
+            target_kind="zones",
+            target_value="zone-1",
+        ),
+    ),
+    (
+        ActionSpec(
+            action_type=ActionType.PURGE_CACHE,
+            target="zone-2",
+            params={"zone": "zone-2", "urls": ["https://example.com"]},
+            risk=RiskClass.R1,
+        ),
+        context(
+            managed_targets={"cloudflare": {"zones": ["zone-1"]}},
+            target_provider="cloudflare",
+            target_kind="zones",
+            target_value="zone-2",
+        ),
+    ),
+    (
+        ActionSpec(
+            action_type=ActionType.PURGE_CACHE,
+            target="zone-2",
+            params={"zone": "zone-2", "urls": ["https://example.com"]},
+            risk=RiskClass.R1,
+        ),
+        context(
+            managed_targets={"cloudflare": {"zones": ["*"]}},
+            target_provider="cloudflare",
+            target_kind="zones",
+            target_value="zone-2",
+        ),
+    ),
+    (
+        ActionSpec(
+            action_type=ActionType.REVOKE_CREDENTIAL,
+            target="github",
+            params={"credential_id": "cred-1", "credential_ref": "env:EXPOSED_PAT"},
+            risk=RiskClass.R2,
+        ),
+        context(
+            managed_targets={"github": {}},
+            target_provider="github",
+            target_kind=None,
+            target_value=None,
+            approvals_granted=1,
+        ),
+    ),
+    (
+        ActionSpec(
+            action_type=ActionType.PURGE_CACHE,
+            target="zone-2",
+            params={"zone": "zone-2", "urls": ["https://example.com"]},
+            risk=RiskClass.R1,
+        ),
+        context(
+            evidence_count=0,
+            managed_targets={"cloudflare": {"zones": ["zone-1"]}},
+            target_provider="cloudflare",
+            target_kind="zones",
+            target_value="zone-2",
+        ),
+    ),
 ]
 
 

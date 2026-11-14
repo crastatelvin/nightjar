@@ -289,6 +289,10 @@ Real and exercised end to end:
   as typed, non-simulated operations;
 - GitHub credential revocation, verified by presenting the token and requiring a `401`:
   a `202` from GitHub only means the request was queued, so it is never treated as proof;
+- a policy-enforced target allowlist (`NIGHTJAR_MANAGED_TARGETS`) in both the local and
+  Rego engines: a plan that names a zone, repository, mailbox, project, or app outside
+  the list is denied before approval, so a prompt-injected plan cannot pick its own
+  destination;
 - `nightjarctl doctor` and `GET /v1/meta/capabilities`, which report per action which
   provider can really do it and whether that provider is healthy right now;
 - the API, SSE stream, UI, standalone image, and CI.
@@ -307,9 +311,7 @@ Not yet real:
 - one shared bearer token and a self-asserted actor; no per-user identity, RBAC, or rate
   limiting;
 - one API process is the only safe topology: the stability scheduler and per-incident
-  locks are in-process, so replicas would double-run checks;
-- targets are not yet restricted to an allowlist, so `NIGHTJAR_MANAGED_TARGETS` is
-  required in production but not enforced by policy. That is the next slice.
+  locks are in-process, so replicas would double-run checks.
 
 Production is fail-closed at startup: with `NIGHTJAR_ENVIRONMENT=production` the process
 refuses to boot with the lab connector on, private probes allowed, no bearer token or

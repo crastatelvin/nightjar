@@ -183,3 +183,67 @@ def test_policy_context_rejects_out_of_range_confidence(confidence: float) -> No
     payload = {**CONTEXT.model_dump(), "confidence": confidence}
     with pytest.raises(ValueError):
         PolicyContext(**payload)
+
+
+# ------------------------------------------------------------ managed targets
+MANAGED = {"cloudflare": {"zones": ["cornershop"]}}
+
+
+def managed_context(
+    action_spec: ActionSpec, managed: dict[str, dict[str, list[str]]], **kw: object
+):
+    from nightjar.core.targets import resolve_target
+
+    target = resolve_target(action_spec)
+    return {
+        "managed_targets": managed,
+        "target_provider": target.provider if target else None,
+        "target_kind": target.kind if target else None,
+        "target_value": target.value if target else None,
+        **kw,
+    }
+
+
+async def test_an_unmanaged_zone_is_denied() -> None:
+    spec = action(ActionType.PURGE_CACHE, RiskClass.R1, zone="another-zone")
+    result = await decide(spec, **managed_context(spec, MANAGED))
+    assert result.decision is Decision.DENY
+    assert result.reasons == ["target is not in NIGHTJAR_MANAGED_TARGETS"]
+    assert result.matched_rules == ["target_not_managed"]
+
+
+async def test_a_managed_zone_is_allowed() -> None:
+    spec = action(ActionType.PURGE_CACHE, RiskClass.R1, zone="cornershop")
+    result = await decide(spec, **managed_context(spec, MANAGED))
+    assert result.decision is Decision.ALLOW
+    assert result.matched_rules == ["low_risk_auto"]
+
+
+async def test_a_denied_target_cannot_be_approved_away() -> None:
+    spec = action(ActionType.ENABLE_UNDER_ATTACK, RiskClass.R2, zone="another-zone")
+    result = await decide(spec, **managed_context(spec, MANAGED, approvals_granted=1))
+    assert result.decision is Decision.DENY
+
+
+async def test_a_read_only_probe_does_not_need_a_managed_target() -> None:
+    spec = action(ActionType.PROBE, RiskClass.R0)
+    result = await decide(
+        spec,
+        **managed_context(
+            spec,
+            MANAGED,
+            evidence_count=0,
+            confidence=0.0,
+            target_provider="http",
+            target_kind=None,
+        ),
+    )
+    assert result.decision is Decision.ALLOW
+    assert result.matched_rules == ["read_only_allow"]
+
+
+async def test_an_unmanaged_provider_is_denied_even_without_a_destination() -> None:
+    spec = action(ActionType.REVOKE_CREDENTIAL, RiskClass.R2, credential_id="cred-1")
+    result = await decide(spec, **managed_context(spec, MANAGED))
+    assert result.decision is Decision.DENY
+    assert "target_not_managed" in result.matched_rules

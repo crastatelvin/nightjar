@@ -5,13 +5,62 @@ package nightjar
 # Input shape:
 #   input.action  { action_type, risk, target }
 #   input.context { confidence, evidence_count, blast_radius, change_freeze,
-#                   approvals_granted, break_glass, severity, incident_class }
+#                   approvals_granted, break_glass, severity, incident_class,
+#                   managed_targets, target_provider, target_kind, target_value }
 #
 # Output: { decision, reasons, matched_rules, required_approvals }
 
 default decision := "deny"
 
 prohibited := {"delete_data", "transfer_money", "disable_logging", "contact_third_party", "rotate_root_credential", "modify_billing", "create_admin_user"}
+
+# --- managed targets --------------------------------------------------------
+# An empty allowlist is unmanaged development mode; production refuses to
+# start that way. Both sides are normalised before they reach this policy, so
+# the comparison is equality or an explicit "*" wildcard.
+
+managed_targets := object.get(input.context, "managed_targets", {})
+target_provider := object.get(input.context, "target_provider", null)
+target_kind := object.get(input.context, "target_kind", null)
+target_value := object.get(input.context, "target_value", null)
+
+target_allowed if {
+  count(managed_targets) == 0
+}
+
+target_allowed if {
+  target_provider == null
+}
+
+target_allowed if {
+  count(managed_targets) > 0
+  target_provider != null
+  target_kind == null
+  managed_targets[target_provider]
+}
+
+target_allowed if {
+  count(managed_targets) > 0
+  target_provider != null
+  target_kind != null
+  targets := managed_targets[target_provider][target_kind]
+  target_matches(targets)
+}
+
+target_matches(targets) if {
+  some target in targets
+  target == "*"
+}
+
+target_matches(targets) if {
+  some target in targets
+  target == target_value
+}
+
+deny_reasons contains "target is not in NIGHTJAR_MANAGED_TARGETS" if {
+  input.action.risk != "r0"
+  not target_allowed
+}
 
 deny_reasons contains "prohibited action" if {
   prohibited[input.action.action_type]
@@ -81,6 +130,11 @@ required_approvals := 2 if {
   input.action.risk == "r1"
   not r1_auto_ok
 } else := 0
+
+matched_rules contains "target_not_managed" if {
+  input.action.risk != "r0"
+  not target_allowed
+}
 
 matched_rules contains "prohibited_action" if {
   prohibited[input.action.action_type]
