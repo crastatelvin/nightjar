@@ -74,6 +74,12 @@ and oversized parameters. `http` is read-only; `lab` is the synthetic
 environment; `github`, `cloudflare`, and `google` are real adapters; `webhook`
 sends signed notifications.
 
+Cloudflare actions are read back rather than trusted: under-attack is verified
+by re-reading the zone's security level, and a Pages rollback is verified against
+the production deployment list, after first refusing any target whose
+`latest_stage.status` is not `success`. A cache purge has no reliable read-back
+in the Cloudflare API, so it is verified by an HTTP predicate on the purged URL.
+
 The Google Workspace connector uses a service account with domain-wide
 delegation and impersonates one managed mailbox per request, so Nightjar never
 holds a user password or refresh token. Quarantine is a label plus removal from

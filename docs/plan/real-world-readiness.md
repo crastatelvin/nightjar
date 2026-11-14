@@ -44,14 +44,15 @@ recorded incidents, one per class, with chain verification green.
 |---|---|---|
 | Closed loop, typed actions, policy, approvals | Real | 46/46 eval cases |
 | Hash-chained evidence and timeline | Real | `tests/test_evidence.py`, chain endpoint |
-| `purge_cache`, `enable_under_attack` | Real HTTP | `connectors/cloudflare.py` |
+| `purge_cache`, `enable_under_attack` | Real HTTP; under-attack is read back | `connectors/cloudflare.py` |
 | `open_issue` | Real HTTP | `connectors/github.py` |
 | `notify` | Real HTTP, HMAC-signed when configured | `connectors/webhook.py` |
 | `http.get` probe | Real, SSRF-guarded | `connectors/http.py` |
 | `revoke_credential` (GitHub) | **Real HTTP**, proven by a 401 probe | `connectors/github.py` |
 | `quarantine_message`, `block_sender` (Google) | **Real HTTP** | `connectors/google_workspace.py` |
 | `quarantine_message`, `block_sender` (Microsoft) | **Lab only** | `connectors/lab.py` |
-| `rollback_deployment`, `restart_service` | **Lab only** | `connectors/lab.py` |
+| `rollback_deployment` (Cloudflare Pages) | **Real HTTP**, read back from production | `connectors/cloudflare.py` |
+| `rollback_deployment` (Vercel/Render), `restart_service` | **Lab only** | `connectors/lab.py` |
 | Credential-liveness verification | Real | `CredentialCheck`, `tests/test_github_revocation.py` |
 | Capability discovery | Real | `nightjarctl doctor`, `GET /v1/meta/capabilities` |
 | Fail-closed production defaults | Real | `Settings._refuse_unsafe_production` |
@@ -1032,7 +1033,7 @@ Workspace; Microsoft 365 (6.10) and the deploy connectors are open.
 | 6.9 ✅ | Google Workspace connector: quarantine + filter | `connectors/google_workspace.py`, tests | label present/INBOX absent; filter read back | 14 |
 | 6.10 | Microsoft 365 connector: move + rule + revoke sessions | `connectors/microsoft365.py`, tests | new message id handled; rule read back | 16 |
 | 6.11 | Stripe assisted revocation (`MANUAL_STEP` + probe) | `connectors/stripe.py`, `core/actions.py`, UI | manual step visible; 401 passes; 403 fails | 8 |
-| 6.12 | Cloudflare Pages rollback + read-back checks | `connectors/cloudflare.py`, tests | production deployment id verified | 8 |
+| 6.12 ✅ | Cloudflare Pages rollback + read-back checks | `connectors/cloudflare.py`, tests | production deployment id verified | 8 |
 | 6.13 | Vercel rollback + alias verification | `connectors/vercel.py`, tests | `READY`, alias present | 8 |
 | 6.14 | Render rollback/restart + autodeploy pause | `connectors/render.py`, tests | autodeploy off, deploy live | 8 |
 | 6.15 | Fly machine restart + wait | `connectors/fly.py`, tests | `started`, `updated_at` after request | 6 |

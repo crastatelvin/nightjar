@@ -285,8 +285,9 @@ Real and exercised end to end:
   ledger, against the CornerShop lab and 46 evaluation cases;
 - read-only probes (`http.get`) with SSRF guarding, and verification predicates
   (HTTP status, JSON path, DNS, TLS) against any URL you configure;
-- Cloudflare cache purge and under-attack, GitHub issue creation, and webhook notify
-  as typed, non-simulated operations;
+- Cloudflare cache purge, under-attack, and Pages rollback, GitHub issue creation,
+  and webhook notify as typed, non-simulated operations. Under-attack and Pages
+  production are read back from the provider before the incident resolves;
 - GitHub credential revocation, verified by presenting the token and requiring a `401`:
   a `202` from GitHub only means the request was queued, so it is never treated as proof;
 - Gmail quarantine and sender blocking through a delegated service account: the
@@ -305,7 +306,7 @@ Real and exercised end to end:
 
 Not yet real:
 
-- Microsoft 365 mail containment, deployment rollback, and service restart have
+- Microsoft 365 mail containment, Vercel/Render rollback, and service restart have
   **no production connector**; they run against the lab only, so those incidents
   cannot be remediated end to end yet.
   [docs/plan/real-world-readiness.md](docs/plan/real-world-readiness.md) is the work

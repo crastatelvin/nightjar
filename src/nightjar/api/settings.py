@@ -101,6 +101,8 @@ class Settings(BaseSettings):
     github_credential_revocation: bool = False
     cloudflare_token: str | None = None
     cloudflare_api_url: str = "https://api.cloudflare.com/client/v4"
+    cloudflare_account_id: str | None = None
+    cloudflare_pages_project: str | None = None
     google_service_account_file: str | None = None
     google_api_url: str = "https://gmail.googleapis.com"
     google_oauth_url: str = "https://oauth2.googleapis.com/token"

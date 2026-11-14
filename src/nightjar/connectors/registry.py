@@ -95,7 +95,12 @@ def build_registry(settings: Settings) -> ConnectorRegistry:
         )
     if settings.cloudflare_token:
         real.append(
-            CloudflareConnector(settings.cloudflare_token, base_url=settings.cloudflare_api_url)
+            CloudflareConnector(
+                settings.cloudflare_token,
+                base_url=settings.cloudflare_api_url,
+                account_id=settings.cloudflare_account_id,
+                pages_project=settings.cloudflare_pages_project,
+            )
         )
     if settings.google_service_account_file:
         real.append(
