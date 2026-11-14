@@ -134,8 +134,9 @@ step that is still verified.
    unauthenticated revocation API, proven dead by a `401` probe. Google OAuth
    and Microsoft sessions are open. Stripe has no public revoke API, so it
    becomes a manual step whose completion is proven by a `401` probe.
-4. **Mail containment.** Google Workspace labels and filters; Microsoft 365
-   message move, inbox rules, and session revocation.
+4. **Mail containment.** ✅ Google Workspace labels and filters, read back before
+   the incident can resolve. Microsoft 365 message move, inbox rules, and
+   session revocation are open.
 5. **Deploy and runtime.** Cloudflare Pages, Vercel, and Render rollback; Fly and
    Render restart. Render rollback also pauses autodeploy, or the next push
    undoes it.

@@ -6,6 +6,7 @@ from nightjar.api.settings import Settings
 from nightjar.connectors.base import CheckFn, Connector, ConnectorError, ToolResult
 from nightjar.connectors.cloudflare import CloudflareConnector
 from nightjar.connectors.github import GitHubConnector
+from nightjar.connectors.google_workspace import GoogleWorkspaceConnector
 from nightjar.connectors.http import HttpConnector
 from nightjar.connectors.lab import LabConnector
 from nightjar.connectors.webhook import WebhookConnector
@@ -95,6 +96,16 @@ def build_registry(settings: Settings) -> ConnectorRegistry:
     if settings.cloudflare_token:
         real.append(
             CloudflareConnector(settings.cloudflare_token, base_url=settings.cloudflare_api_url)
+        )
+    if settings.google_service_account_file:
+        real.append(
+            GoogleWorkspaceConnector(
+                settings.google_service_account_file,
+                mailboxes=tuple(settings.managed_targets.get("google", {}).get("mailboxes", [])),
+                api_url=settings.google_api_url,
+                oauth_url=settings.google_oauth_url,
+                quarantine_label=settings.google_quarantine_label,
+            )
         )
     if settings.notify_webhook_url:
         real.append(

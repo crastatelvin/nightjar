@@ -49,7 +49,8 @@ recorded incidents, one per class, with chain verification green.
 | `notify` | Real HTTP, HMAC-signed when configured | `connectors/webhook.py` |
 | `http.get` probe | Real, SSRF-guarded | `connectors/http.py` |
 | `revoke_credential` (GitHub) | **Real HTTP**, proven by a 401 probe | `connectors/github.py` |
-| `quarantine_message`, `block_sender` | **Lab only** | `connectors/lab.py` |
+| `quarantine_message`, `block_sender` (Google) | **Real HTTP** | `connectors/google_workspace.py` |
+| `quarantine_message`, `block_sender` (Microsoft) | **Lab only** | `connectors/lab.py` |
 | `rollback_deployment`, `restart_service` | **Lab only** | `connectors/lab.py` |
 | Credential-liveness verification | Real | `CredentialCheck`, `tests/test_github_revocation.py` |
 | Capability discovery | Real | `nightjarctl doctor`, `GET /v1/meta/capabilities` |
@@ -1015,7 +1016,8 @@ Estimates are focused engineering hours, including tests and docs.
 ### Phase 6 — Production execution surface (P0)
 
 Status: ✅ shipped in this phase. 6.16 is half shipped — outbound notifications are
-signed, inbound signature verification on intake is not. Everything else is open.
+signed, inbound signature verification on intake is not. 6.9 is shipped for Google
+Workspace; Microsoft 365 (6.10) and the deploy connectors are open.
 
 | ID | Task | Files | Acceptance | Est |
 |---|---|---|---|---|
@@ -1027,7 +1029,7 @@ signed, inbound signature verification on intake is not. Everything else is open
 | 6.6 ✅ | `nightjarctl doctor` + `GET /v1/meta/capabilities` | `cli/doctor.py`, `api/routers/meta.py`, `pyproject.toml`, tests | table renders; exit 0 only when all required ok | 10 |
 | 6.7 ✅ | GitHub revocation connector (3 modes) | `connectors/github.py`, tests | 202 recorded; probe 401 passes; 403 fails | 10 |
 | 6.8 ✅ | `CredentialCheck` + `PredicateKind.CREDENTIAL` wiring | `core/verification.py`, `api/service.py`, tests | revoked → pass, live → fail, 403 → fail | 6 |
-| 6.9 | Google Workspace connector: quarantine + filter | `connectors/google_workspace.py`, tests | label present/INBOX absent; filter read back | 14 |
+| 6.9 ✅ | Google Workspace connector: quarantine + filter | `connectors/google_workspace.py`, tests | label present/INBOX absent; filter read back | 14 |
 | 6.10 | Microsoft 365 connector: move + rule + revoke sessions | `connectors/microsoft365.py`, tests | new message id handled; rule read back | 16 |
 | 6.11 | Stripe assisted revocation (`MANUAL_STEP` + probe) | `connectors/stripe.py`, `core/actions.py`, UI | manual step visible; 401 passes; 403 fails | 8 |
 | 6.12 | Cloudflare Pages rollback + read-back checks | `connectors/cloudflare.py`, tests | production deployment id verified | 8 |

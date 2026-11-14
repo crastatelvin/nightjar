@@ -101,6 +101,10 @@ class Settings(BaseSettings):
     github_credential_revocation: bool = False
     cloudflare_token: str | None = None
     cloudflare_api_url: str = "https://api.cloudflare.com/client/v4"
+    google_service_account_file: str | None = None
+    google_api_url: str = "https://gmail.googleapis.com"
+    google_oauth_url: str = "https://oauth2.googleapis.com/token"
+    google_quarantine_label: str = "Nightjar-Quarantine"
     notify_webhook_url: str | None = None
     notify_webhook_secret: str | None = None
 
@@ -136,6 +140,13 @@ class Settings(BaseSettings):
             problems.append("production requires NIGHTJAR_MANAGED_TARGETS")
         if self.stability_seconds < 60:
             problems.append("NIGHTJAR_STABILITY_SECONDS must be at least 60 in production")
+        if self.google_service_account_file and not self.managed_targets.get("google", {}).get(
+            "mailboxes"
+        ):
+            problems.append(
+                "NIGHTJAR_MANAGED_TARGETS.google.mailboxes is required when the "
+                "Google Workspace connector is configured"
+            )
         if problems:
             raise ValueError("unsafe production configuration: " + "; ".join(problems))
         return self

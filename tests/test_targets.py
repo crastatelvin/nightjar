@@ -161,3 +161,28 @@ def test_blank_entries_are_dropped_rather_than_matching_everything() -> None:
     managed = normalize_managed_targets({"cloudflare": {"zones": ["  "]}})
     assert managed["cloudflare"]["zones"] == []
     assert target_allowed(resolve_target(purge()), managed) is False
+
+
+def test_a_mail_action_targets_the_mailbox_not_the_message() -> None:
+    action = ActionSpec(
+        action_type=ActionType.QUARANTINE_MESSAGE,
+        target="msg_phish_0001",
+        params={"message_id": "msg_phish_0001"},
+        risk=RiskClass.R1,
+    )
+    target = resolve_target(action)
+    assert target is not None
+    assert (target.provider, target.kind, target.value) == ("google", "mailboxes", "")
+    managed = normalize_managed_targets({"google": {"mailboxes": ["owner@example.com"]}})
+    assert target_allowed(target, managed) is False
+
+
+def test_a_mail_action_with_a_mailbox_is_managed() -> None:
+    action = ActionSpec(
+        action_type=ActionType.BLOCK_SENDER,
+        target="bad@example.com",
+        params={"sender": "bad@example.com", "mailbox": "Owner@Example.com"},
+        risk=RiskClass.R2,
+    )
+    managed = normalize_managed_targets({"google": {"mailboxes": ["owner@example.com"]}})
+    assert target_allowed(resolve_target(action), managed) is True

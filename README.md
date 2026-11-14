@@ -289,6 +289,9 @@ Real and exercised end to end:
   as typed, non-simulated operations;
 - GitHub credential revocation, verified by presenting the token and requiring a `401`:
   a `202` from GitHub only means the request was queued, so it is never treated as proof;
+- Gmail quarantine and sender blocking through a delegated service account: the
+  message must carry the quarantine label and be out of the inbox, and the filter is
+  read back, before the incident resolves;
 - a policy-enforced target allowlist (`NIGHTJAR_MANAGED_TARGETS`) in both the local and
   Rego engines: a plan that names a zone, repository, mailbox, project, or app outside
   the list is denied before approval, so a prompt-injected plan cannot pick its own
@@ -302,9 +305,9 @@ Real and exercised end to end:
 
 Not yet real:
 
-- message quarantine, sender blocking, deployment rollback, and service restart have
-  **no production connector**; they run against the lab only, so a real phishing
-  incident cannot be remediated end to end yet.
+- Microsoft 365 mail containment, deployment rollback, and service restart have
+  **no production connector**; they run against the lab only, so those incidents
+  cannot be remediated end to end yet.
   [docs/plan/real-world-readiness.md](docs/plan/real-world-readiness.md) is the work
   order that closes this, including the one case that cannot be automated: Stripe has
   no public API to expire a secret key, so Nightjar proves the key is dead after a

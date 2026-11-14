@@ -544,6 +544,12 @@ class MockAgentRuntime:
                 )
             message_id = str(message.content.get("id", ""))
             sender = str(message.content.get("sender", ""))
+            mailbox = str(
+                payload.incident.metadata.get("mailbox")
+                or payload.incident.metadata.get("reported_by")
+                or ""
+            )
+            mail_params = {"mailbox": mailbox} if mailbox else {}
             predicates = [
                 _connector(
                     "message_quarantined",
@@ -560,7 +566,7 @@ class MockAgentRuntime:
                 ActionSpec(
                     action_type=ActionType.QUARANTINE_MESSAGE,
                     target=message_id,
-                    params={"connector": "lab", "message_id": message_id},
+                    params={"connector": "lab", "message_id": message_id, **mail_params},
                     risk=RiskClass.R1,
                     description="Quarantine the reported message for all recipients.",
                     rollback="Release the message from quarantine if it is reclassified.",
@@ -570,7 +576,7 @@ class MockAgentRuntime:
                 ActionSpec(
                     action_type=ActionType.BLOCK_SENDER,
                     target=sender,
-                    params={"connector": "lab", "sender": sender},
+                    params={"connector": "lab", "sender": sender, **mail_params},
                     risk=RiskClass.R2,
                     description=f"Block {sender} at the mail gateway.",
                     rollback="Remove the sender from the blocklist if it is a false positive.",

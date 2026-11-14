@@ -7,31 +7,42 @@ from typing import Any
 from nightjar.core.enums import ActionType
 from nightjar.core.models import ActionSpec
 
-# Where an action lands when the plan does not name a connector: the provider
-# that owns the action, and the allowlist key the destination must appear under.
-# ``None`` means the action has no destination of its own — revoking a token you
-# already hold, notifying a configured webhook, probing a URL — so only the
-# provider has to be managed.
-ACTION_TARGET: dict[ActionType, tuple[str, str | None]] = {
-    ActionType.PURGE_CACHE: ("cloudflare", "zones"),
-    ActionType.ENABLE_UNDER_ATTACK: ("cloudflare", "zones"),
-    ActionType.ROLLBACK_DEPLOYMENT: ("cloudflare", "projects"),
-    ActionType.RESTART_SERVICE: ("fly", "apps"),
-    ActionType.QUARANTINE_MESSAGE: ("google", "mailboxes"),
-    ActionType.BLOCK_SENDER: ("google", "mailboxes"),
-    ActionType.OPEN_ISSUE: ("github", "repos"),
-    ActionType.REVOKE_CREDENTIAL: ("github", None),
-    ActionType.NOTIFY: ("webhook", None),
-    ActionType.PROBE: ("http", None),
-}
 
-# Parameter names a planner may use for the destination, most specific first.
-_KIND_KEYS: dict[str, tuple[str, ...]] = {
-    "zones": ("zone_id", "zone"),
-    "repos": ("repository", "repo"),
-    "mailboxes": ("mailbox", "user", "upn"),
-    "projects": ("project_id", "project"),
-    "apps": ("app_id", "app"),
+@dataclass(frozen=True)
+class TargetSpec:
+    provider: str
+    kind: str | None
+    keys: tuple[str, ...] = ()
+    fallback_to_target: bool = True
+
+
+# Where an action lands when the plan does not name a connector: the provider
+# that owns the action, the allowlist key the destination must appear under, and
+# the parameter names a planner may use for it. ``kind=None`` means the action
+# has no destination of its own — revoking a token you already hold, notifying a
+# configured webhook, probing a URL — so only the provider has to be managed.
+#
+# Mail actions never fall back to ``action.target``: that is the message id or
+# the sender, not the mailbox that must be managed.
+ACTION_TARGET: dict[ActionType, TargetSpec] = {
+    ActionType.PURGE_CACHE: TargetSpec("cloudflare", "zones", ("zone_id", "zone")),
+    ActionType.ENABLE_UNDER_ATTACK: TargetSpec("cloudflare", "zones", ("zone_id", "zone")),
+    ActionType.ROLLBACK_DEPLOYMENT: TargetSpec(
+        "cloudflare", "projects", ("project_id", "project", "service", "service_id")
+    ),
+    ActionType.RESTART_SERVICE: TargetSpec(
+        "fly", "apps", ("app_id", "app", "service", "service_id")
+    ),
+    ActionType.QUARANTINE_MESSAGE: TargetSpec(
+        "google", "mailboxes", ("mailbox",), fallback_to_target=False
+    ),
+    ActionType.BLOCK_SENDER: TargetSpec(
+        "google", "mailboxes", ("mailbox",), fallback_to_target=False
+    ),
+    ActionType.OPEN_ISSUE: TargetSpec("github", "repos", ("repository", "repo")),
+    ActionType.REVOKE_CREDENTIAL: TargetSpec("github", None),
+    ActionType.NOTIFY: TargetSpec("webhook", None),
+    ActionType.PROBE: TargetSpec("http", None),
 }
 
 # Repository and mailbox identifiers are case-insensitive at every provider.
@@ -81,25 +92,24 @@ def normalize_managed_targets(raw: Mapping[str, Any]) -> ManagedTargets:
 
 def resolve_target(action: ActionSpec) -> ResolvedTarget | None:
     """Work out which real destination an action would touch."""
-    mapping = ACTION_TARGET.get(action.action_type)
-    if mapping is None:
+    spec = ACTION_TARGET.get(action.action_type)
+    if spec is None:
         return None
-    default_provider, kind = mapping
-    provider = str(action.params.get("connector") or default_provider)
-    if kind is None:
+    provider = str(action.params.get("connector") or spec.provider)
+    if spec.kind is None:
         return ResolvedTarget(provider=provider, kind=None, value=None)
     value = ""
-    for key in _KIND_KEYS.get(kind, ()):
+    for key in spec.keys:
         candidate = action.params.get(key)
         if isinstance(candidate, str) and candidate.strip():
             value = candidate
             break
-    if not value:
+    if not value and spec.fallback_to_target:
         value = action.target
     return ResolvedTarget(
         provider=provider,
-        kind=kind,
-        value=normalize_target_value(kind, value),
+        kind=spec.kind,
+        value=normalize_target_value(spec.kind, value),
     )
 
 

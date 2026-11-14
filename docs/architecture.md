@@ -71,8 +71,14 @@ domain code, prompt schema, or test.
 Connectors translate typed actions and probes into provider calls. The
 registry refuses ambiguous mappings, duplicate tool names, unknown read tools,
 and oversized parameters. `http` is read-only; `lab` is the synthetic
-environment; `github` and `cloudflare` are real adapters; `webhook` sends
-signed notifications.
+environment; `github`, `cloudflare`, and `google` are real adapters; `webhook`
+sends signed notifications.
+
+The Google Workspace connector uses a service account with domain-wide
+delegation and impersonates one managed mailbox per request, so Nightjar never
+holds a user password or refresh token. Quarantine is a label plus removal from
+`INBOX`/`UNREAD`; sender blocking is a Gmail filter. Both are read back by the
+verifier, and an existing filter is replayed rather than duplicated.
 
 Each connector declares `capabilities()` — the actions it can really perform and
 the kinds of target they need — and implements `preflight()`, which answers "can

@@ -70,3 +70,17 @@ def test_managed_targets_parse_from_json_environment(monkeypatch: pytest.MonkeyP
     )
     settings = Settings(_env_file=None)
     assert settings.managed_targets["github"]["repos"] == ["acme/site"]
+
+
+def test_google_requires_a_managed_mailbox_in_production() -> None:
+    with pytest.raises(ValidationError) as excinfo:
+        _production(google_service_account_file="/etc/nightjar/google.json")
+    assert "google.mailboxes" in str(excinfo.value)
+
+
+def test_google_with_a_managed_mailbox_is_accepted() -> None:
+    settings = _production(
+        google_service_account_file="/etc/nightjar/google.json",
+        managed_targets={"google": {"mailboxes": ["owner@acme.example"]}},
+    )
+    assert settings.google_service_account_file == "/etc/nightjar/google.json"
