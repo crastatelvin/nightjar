@@ -5,13 +5,18 @@ from typing import Any
 
 import pytest
 
+from nightjar.api.settings import Settings
 from nightjar.connectors.base import ConnectorError, ToolResult
 from nightjar.connectors.http import HttpConnector
 from nightjar.connectors.lab import LabConnector
-from nightjar.connectors.registry import ConnectorRegistry
+from nightjar.connectors.registry import ConnectorRegistry, build_registry
 from nightjar.core.actions import ActionValidationError
 from nightjar.core.enums import ActionType, RiskClass
 from nightjar.core.models import ActionSpec
+
+
+def names(settings: Settings) -> list[str]:
+    return sorted(connector.name for connector in build_registry(settings).connectors)
 
 
 def purge(connector: str | None = None) -> ActionSpec:
@@ -106,3 +111,78 @@ def test_registry_refuses_invalid_actions_before_dispatch() -> None:
     invalid = purge().model_copy(update={"risk": RiskClass.R0})
     with pytest.raises(ActionValidationError):
         asyncio.run(registry.execute(invalid))
+
+
+# --------------------------------------------------------------- build_registry
+def test_development_registry_has_the_lab_and_the_read_only_prober() -> None:
+    assert names(Settings(_env_file=None)) == ["http", "lab"]
+
+
+def test_provider_connectors_are_absent_without_credentials() -> None:
+    assert "github" not in names(Settings(_env_file=None))
+    assert "cloudflare" not in names(Settings(_env_file=None))
+    assert "webhook" not in names(Settings(_env_file=None))
+
+
+def test_a_github_token_enables_issues_and_revocation_together() -> None:
+    settings = Settings(_env_file=None, github_token="ghp_" + "a" * 36)
+    assert "github" in names(settings)
+    registry = build_registry(settings)
+    assert "github.repo_file" in registry.tools()
+    assert "github.credential_revoked" in registry.verification_checks()
+
+
+def test_revocation_can_be_enabled_without_a_github_token() -> None:
+    """The revocation endpoint is unauthenticated; issue creation still is not."""
+    settings = Settings(_env_file=None, github_credential_revocation=True)
+    registry = build_registry(settings)
+    assert "github" in names(settings)
+    connector = registry.connector_for(
+        ActionSpec(
+            action_type=ActionType.REVOKE_CREDENTIAL,
+            target="github",
+            params={"credential_ref": "env:EXPOSED_PAT"},
+            risk=RiskClass.R2,
+        )
+    )
+    assert connector.name == "github"
+
+
+def test_the_lab_never_shadows_a_real_connector_for_the_same_action() -> None:
+    settings = Settings(_env_file=None, github_credential_revocation=True)
+    registry = build_registry(settings)
+    lab = next(connector for connector in registry.connectors if connector.name == "lab")
+    assert ActionType.REVOKE_CREDENTIAL not in lab.action_types
+    # The actions with no real implementation still fall back to the lab.
+    assert ActionType.QUARANTINE_MESSAGE in lab.action_types
+    # And asking for the lab by name cannot fake a revocation.
+    with pytest.raises(ConnectorError, match="no connector available"):
+        registry.connector_for(
+            ActionSpec(
+                action_type=ActionType.REVOKE_CREDENTIAL,
+                target="github",
+                params={"connector": "lab", "credential_ref": "env:EXPOSED_PAT"},
+                risk=RiskClass.R2,
+            )
+        )
+
+
+def test_cloudflare_and_webhook_appear_only_when_configured() -> None:
+    settings = Settings(
+        _env_file=None,
+        cloudflare_token="cf-token",
+        notify_webhook_url="https://hooks.example.com/nightjar",
+    )
+    assert names(settings) == ["cloudflare", "http", "lab", "webhook"]
+
+
+def test_every_registered_tool_and_check_name_is_unique() -> None:
+    settings = Settings(
+        _env_file=None,
+        github_token="ghp_" + "a" * 36,
+        cloudflare_token="cf-token",
+        notify_webhook_url="https://hooks.example.com/nightjar",
+    )
+    registry = build_registry(settings)
+    tools = [tool for connector in registry.connectors for tool in connector.tool_names]
+    assert len(tools) == len(set(tools))

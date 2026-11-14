@@ -11,6 +11,7 @@ from nightjar.connectors.lab import LabConnector
 from nightjar.connectors.webhook import WebhookConnector
 from nightjar.core.actions import validate_action
 from nightjar.core.models import ActionSpec
+from nightjar.core.secrets import EnvVault
 
 
 class ConnectorRegistry:
@@ -82,16 +83,26 @@ class ConnectorRegistry:
 
 
 def build_registry(settings: Settings) -> ConnectorRegistry:
-    connectors: list[Connector] = []
-    if settings.lab_enabled:
-        connectors.append(LabConnector(settings.lab_base_url))
-    connectors.append(HttpConnector(allow_private=settings.allow_private_probes))
-    if settings.github_token:
-        connectors.append(GitHubConnector(settings.github_token, base_url=settings.github_api_url))
+    real: list[Connector] = [HttpConnector(allow_private=settings.allow_private_probes)]
+    if settings.github_token or settings.github_credential_revocation:
+        real.append(
+            GitHubConnector(
+                settings.github_token,
+                base_url=settings.github_api_url,
+                vault=EnvVault(),
+            )
+        )
     if settings.cloudflare_token:
-        connectors.append(
+        real.append(
             CloudflareConnector(settings.cloudflare_token, base_url=settings.cloudflare_api_url)
         )
     if settings.notify_webhook_url:
-        connectors.append(WebhookConnector(settings.notify_webhook_url))
+        real.append(WebhookConnector(settings.notify_webhook_url))
+
+    connectors: list[Connector] = list(real)
+    if settings.lab_enabled:
+        # The lab stands in only for actions no real connector implements. A
+        # synthetic "credential revoked" must never shadow the real thing.
+        claimed = {action for connector in real for action in connector.action_types}
+        connectors.insert(0, LabConnector(settings.lab_base_url, exclude_actions=claimed))
     return ConnectorRegistry(connectors)

@@ -56,7 +56,8 @@ from nightjar.core.models import (
 )
 from nightjar.core.policy import LocalPolicyEngine, PolicyContext, PolicyEngine, PolicyRequest
 from nightjar.core.redaction import redact_secrets, redact_secrets_obj, redact_text
-from nightjar.core.verification import ConnectorCheck, Verifier
+from nightjar.core.secrets import EnvVault
+from nightjar.core.verification import ConnectorCheck, CredentialCheck, Verifier
 
 log = logging.getLogger(__name__)
 
@@ -103,7 +104,12 @@ class IncidentService:
         self.registry = registry
         self.policy = policy or LocalPolicyEngine()
         self.verifier = verifier or Verifier(
-            checks={PredicateKind.CONNECTOR_CHECK: ConnectorCheck(registry.verification_checks())},
+            checks={
+                PredicateKind.CONNECTOR_CHECK: ConnectorCheck(registry.verification_checks()),
+                PredicateKind.CREDENTIAL: CredentialCheck(
+                    EnvVault(), allow_private=settings.allow_private_probes
+                ),
+            },
             allow_private=settings.allow_private_probes,
         )
         self._locks: dict[str, asyncio.Lock] = {}

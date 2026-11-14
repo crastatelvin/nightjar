@@ -6,24 +6,49 @@ import httpx
 
 from nightjar.connectors.base import ConnectorError, ToolResult
 from nightjar.core.enums import ActionType, EvidenceKind
-from nightjar.core.models import ActionSpec
+from nightjar.core.models import ActionSpec, VerificationPredicate
+from nightjar.core.secrets import (
+    EnvVault,
+    SecretError,
+    SecretVault,
+    fingerprint,
+    hint,
+    is_github_credential,
+)
+from nightjar.core.verification import VerificationError
+
+REVOCATION_ACCEPT = "application/vnd.github+json"
+REVOCATION_API_VERSION = "2026-03-10"
 
 
 class GitHubConnector:
-    """Real GitHub read/issue connector, enabled only when a token is present."""
+    """Real GitHub connector: issues, repository reads, and token revocation.
+
+    Revocation uses GitHub's unauthenticated credential revocation API. A ``202``
+    means the request was accepted, not that the token was valid or is now dead,
+    so the connector never reports revocation as verified. The verifier proves it
+    by presenting the token and expecting a ``401``.
+    """
 
     name = "github"
-    action_types = frozenset({ActionType.OPEN_ISSUE})
+    action_types = frozenset({ActionType.OPEN_ISSUE, ActionType.REVOKE_CREDENTIAL})
     tool_names = frozenset({"github.repo_file"})
 
-    def __init__(self, token: str, *, base_url: str = "https://api.github.com") -> None:
+    def __init__(
+        self,
+        token: str | None,
+        *,
+        base_url: str = "https://api.github.com",
+        vault: SecretVault | None = None,
+    ) -> None:
         self._token = token
         self._base = base_url.rstrip("/")
+        self._vault = vault or EnvVault()
 
     def _headers(self) -> dict[str, str]:
         return {
             "authorization": f"Bearer {self._token}",
-            "accept": "application/vnd.github+json",
+            "accept": REVOCATION_ACCEPT,
             "x-github-api-version": "2022-11-28",
         }
 
@@ -37,8 +62,12 @@ class GitHubConnector:
             raise ConnectorError(f"github unavailable: {exc}", retryable=True) from exc
 
     async def execute(self, action: ActionSpec) -> dict[str, Any]:
+        if action.action_type is ActionType.REVOKE_CREDENTIAL:
+            return await self._revoke(action)
         if action.action_type is not ActionType.OPEN_ISSUE:
             raise ConnectorError(f"github connector does not implement {action.action_type}")
+        if not self._token:
+            raise ConnectorError("github issue creation requires NIGHTJAR_GITHUB_TOKEN")
         repository = str(action.params.get("repository") or action.target)
         response = await self._request(
             "POST",
@@ -56,6 +85,68 @@ class GitHubConnector:
         body = response.json()
         return {"issue_url": body.get("html_url"), "number": body.get("number")}
 
+    async def _revoke(self, action: ActionSpec) -> dict[str, Any]:
+        ref = str(action.params.get("credential_ref", ""))
+        if not ref:
+            raise ConnectorError(
+                "revoke_credential requires credential_ref (env:NAME or file:/path)"
+            )
+        try:
+            raw = self._vault.resolve(ref)
+        except SecretError as exc:
+            raise ConnectorError(str(exc)) from exc
+        if not is_github_credential(raw):
+            raise ConnectorError(
+                "credential is not a GitHub token (expected ghp_, github_pat_, gho_, ghu_, or ghr_)"
+            )
+        if "api.github.com" not in self._base:
+            raise ConnectorError(
+                "GitHub Enterprise Server revocation uses a different, authenticated "
+                "contract and is not supported in v1"
+            )
+
+        # Unauthenticated on purpose: authenticated requests to this endpoint
+        # return 403.
+        try:
+            async with httpx.AsyncClient(timeout=15.0) as client:
+                response = await client.post(
+                    f"{self._base}/credentials/revoke",
+                    headers={
+                        "accept": REVOCATION_ACCEPT,
+                        "x-github-api-version": REVOCATION_API_VERSION,
+                    },
+                    json={"credentials": [raw]},
+                )
+        except httpx.HTTPError as exc:
+            raise ConnectorError(
+                f"github revocation request failed: {exc}", retryable=True
+            ) from exc
+
+        if response.status_code == 429:
+            raise ConnectorError(
+                "github revocation rate limit reached (60 unauthenticated requests/hour)",
+                retryable=True,
+            )
+        if response.status_code == 403:
+            raise ConnectorError(
+                "github revocation rejected the request as authenticated; "
+                "this endpoint must be called without a token"
+            )
+        if response.status_code != 202:
+            raise ConnectorError(
+                f"github revocation failed: {response.status_code} {response.text[:200]}"
+            )
+
+        # 202 only means "queued". Never claim the credential is dead here.
+        return {
+            "provider": "github",
+            "requested": True,
+            "status": response.status_code,
+            "fingerprint": fingerprint(raw),
+            "hint": hint(raw),
+            "note": "revocation accepted; liveness is proven by the verifier",
+        }
+
     async def collect(self, tool: str, params: dict[str, Any]) -> ToolResult:
         if tool != "github.repo_file":
             raise ConnectorError(f"unknown github tool {tool}")
@@ -63,6 +154,8 @@ class GitHubConnector:
         path = str(params.get("path", ""))
         if not repository or not path:
             raise ConnectorError("github.repo_file requires repository and path")
+        if not self._token:
+            raise ConnectorError("github reads require NIGHTJAR_GITHUB_TOKEN")
         response = await self._request("GET", f"/repos/{repository}/contents/{path}")
         if response.status_code == 404:
             return ToolResult(
@@ -91,4 +184,31 @@ class GitHubConnector:
         )
 
     def verification_checks(self) -> dict[str, Any]:
-        return {}
+        return {"github.credential_revoked": self._check_credential_revoked}
+
+    async def _check_credential_revoked(self, predicate: VerificationPredicate) -> dict[str, Any]:
+        ref = str(predicate.params.get("credential_ref", ""))
+        if not ref:
+            raise VerificationError("github.credential_revoked requires credential_ref")
+        try:
+            raw = self._vault.resolve(ref)
+        except SecretError as exc:
+            raise VerificationError(str(exc)) from exc
+        try:
+            async with httpx.AsyncClient(timeout=15.0) as client:
+                response = await client.get(
+                    f"{self._base}/user",
+                    headers={
+                        "authorization": f"Bearer {raw}",
+                        "accept": REVOCATION_ACCEPT,
+                        "x-github-api-version": "2022-11-28",
+                    },
+                )
+        except httpx.HTTPError as exc:
+            raise VerificationError(f"github credential probe failed: {exc}") from exc
+        return {
+            "provider": "github",
+            "status": response.status_code,
+            "fingerprint": fingerprint(raw),
+            "passed": response.status_code == 401,
+        }

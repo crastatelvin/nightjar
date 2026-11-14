@@ -15,6 +15,7 @@ import httpx
 
 from nightjar.core.enums import PredicateKind
 from nightjar.core.models import VerificationPredicate, VerificationResult
+from nightjar.core.secrets import SecretError, SecretVault, fingerprint
 
 CheckFn = Callable[[VerificationPredicate], Awaitable[dict[str, Any]]]
 
@@ -198,6 +199,50 @@ class ConnectorCheck:
         if name not in self.checks:
             raise VerificationError(f"no connector check registered as {name!r}")
         return await self.checks[name](predicate)
+
+
+@dataclass
+class CredentialCheck:
+    """Prove a credential is dead by presenting it and expecting a rejection.
+
+    The raw value comes from the vault at probe time. Evidence records only the
+    status code and a fingerprint, so a verification record can be shared without
+    leaking the credential it was about.
+    """
+
+    vault: SecretVault
+    allow_private: bool = False
+    timeout: float = 10.0
+
+    async def __call__(self, predicate: VerificationPredicate) -> dict[str, Any]:
+        ref = str(predicate.params.get("credential_ref", ""))
+        url = str(predicate.params.get("probe_url", ""))
+        if not ref:
+            raise VerificationError("credential check requires credential_ref")
+        if not url:
+            raise VerificationError("credential check requires probe_url")
+        validate_url(url, allow_private=self.allow_private)
+        try:
+            raw = self.vault.resolve(ref)
+        except SecretError as exc:
+            raise VerificationError(str(exc)) from exc
+        expected_status = int(predicate.params.get("revoked_status", 401))
+        try:
+            async with httpx.AsyncClient(
+                timeout=self.timeout,
+                follow_redirects=False,
+                headers={"user-agent": "nightjar-verifier/0.1"},
+            ) as client:
+                response = await client.get(url, headers={"authorization": f"Bearer {raw}"})
+        except httpx.HTTPError as exc:
+            raise VerificationError(f"credential probe failed: {exc}") from exc
+        return {
+            "url": url,
+            "status": response.status_code,
+            "revoked_status": expected_status,
+            "fingerprint": fingerprint(raw),
+            "passed": response.status_code == expected_status,
+        }
 
 
 class Verifier:

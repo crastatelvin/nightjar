@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 from typing import Any
 
 import httpx
@@ -43,9 +44,19 @@ class LabConnector:
         }
     )
 
-    def __init__(self, base_url: str, timeout: float = 10.0) -> None:
+    def __init__(
+        self,
+        base_url: str,
+        timeout: float = 10.0,
+        *,
+        exclude_actions: Iterable[ActionType] = (),
+    ) -> None:
         self._base = base_url.rstrip("/")
         self._timeout = timeout
+        # A real connector for the same action always wins. Otherwise a plan
+        # could name ``connector: "lab"`` and get a synthetic "revoked" result
+        # while the exposed credential is still live at the provider.
+        self.action_types = self.action_types - frozenset(exclude_actions)
 
     async def _request(
         self, method: str, path: str, *, json: Any = None, params: dict[str, Any] | None = None

@@ -4,7 +4,7 @@ import json
 from functools import lru_cache
 from typing import Annotated, Any, Literal
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
@@ -27,6 +27,10 @@ class Settings(BaseSettings):
     api_host: str = "127.0.0.1"
     api_port: int = 8000
     api_token: str | None = None
+    oidc_issuer: str | None = None
+    oidc_audience: str | None = None
+    oidc_groups_claim: str = "groups"
+    require_separation_of_duties: bool = False
     cors_origins: Annotated[list[str], NoDecode] = Field(
         default_factory=lambda: ["http://127.0.0.1:3000"]
     )
@@ -77,12 +81,46 @@ class Settings(BaseSettings):
 
     github_token: str | None = None
     github_api_url: str = "https://api.github.com"
+    github_org: str | None = None
+    github_credential_revocation: bool = False
     cloudflare_token: str | None = None
     cloudflare_api_url: str = "https://api.cloudflare.com/client/v4"
     notify_webhook_url: str | None = None
+    notify_webhook_secret: str | None = None
+
+    # Targets the agent may touch, keyed by provider. Policy denies anything
+    # outside this list, so a prompt-injected plan cannot name its own zone,
+    # repository, mailbox, project, or app. Required in production.
+    managed_targets: dict[str, Any] = Field(default_factory=dict)
 
     otel_enabled: bool = False
     otel_endpoint: str | None = None
+
+    @model_validator(mode="after")
+    def _refuse_unsafe_production(self) -> Settings:
+        """Fail at startup, not at the first incident.
+
+        Every one of these settings is safe in development and dangerous in
+        production: a lab connector that pretends to revoke credentials, a
+        prober that can reach link-local metadata, an unauthenticated API, and
+        an agent with no target allowlist.
+        """
+        if self.environment != "production":
+            return self
+        problems: list[str] = []
+        if self.lab_enabled:
+            problems.append("NIGHTJAR_LAB_ENABLED must be false in production")
+        if self.allow_private_probes:
+            problems.append("NIGHTJAR_ALLOW_PRIVATE_PROBES must be false in production")
+        if not (self.api_token or self.oidc_issuer):
+            problems.append("production requires NIGHTJAR_API_TOKEN or NIGHTJAR_OIDC_ISSUER")
+        if not self.managed_targets:
+            problems.append("production requires NIGHTJAR_MANAGED_TARGETS")
+        if self.stability_seconds < 60:
+            problems.append("NIGHTJAR_STABILITY_SECONDS must be at least 60 in production")
+        if problems:
+            raise ValueError("unsafe production configuration: " + "; ".join(problems))
+        return self
 
 
 @lru_cache
