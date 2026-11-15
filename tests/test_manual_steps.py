@@ -5,6 +5,7 @@ from typing import Any, cast
 import pytest
 
 from nightjar.agents.mock import MockAgentRuntime
+from nightjar.api.repository import ConflictError
 from nightjar.api.service import IncidentService
 from nightjar.api.settings import Settings
 from nightjar.connectors.registry import ConnectorRegistry
@@ -13,6 +14,7 @@ from nightjar.core.enums import (
     ActionStatus,
     ActionType,
     EventType,
+    EvidenceKind,
     IncidentClass,
     IncidentStatus,
     PredicateKind,
@@ -23,8 +25,10 @@ from nightjar.core.models import (
     ActionExecution,
     ActionPlan,
     ActionSpec,
+    EvidenceItem,
     Incident,
     VerificationPredicate,
+    VerificationResult,
 )
 
 KEY = "sk_live_51NExampleSecretKey"
@@ -40,6 +44,10 @@ class FakeRepo:
         self.states = {action.id: ActionStatus.APPROVED for action in actions}
         self.events: list[tuple[EventType, dict[str, Any]]] = []
         self.executions: dict[str, ActionExecution] = {}
+        self.evidence: list[EvidenceItem] = []
+        self.verifications: list[VerificationResult] = []
+        self.reopens = 0
+        self.next_check: Any = None
 
     async def get_incident(self, incident_id: str) -> Incident:
         return self.incident
@@ -96,8 +104,52 @@ class FakeRepo:
         self.incident = self.incident.model_copy(update=fields)
         return self.incident
 
-    def record_verification(self, *args: Any, **kwargs: Any) -> Any:
-        raise AssertionError("a manual step must not verify before a human acts")
+    async def list_executions(self, incident_id: str) -> list[ActionExecution]:
+        return list(self.executions.values())
+
+    async def append_evidence(self, item: EvidenceItem) -> EvidenceItem:
+        self.evidence.append(item)
+        return item
+
+    async def record_verification(
+        self, result: VerificationResult, *, phase: str, required: bool
+    ) -> VerificationResult:
+        self.verifications.append(result)
+        return result
+
+    async def set_next_check(self, incident_id: str, when: Any) -> None:
+        self.next_check = when
+
+    async def increment_reopen(self, incident_id: str) -> None:
+        self.reopens += 1
+
+    async def ensure_tenant(self, tenant_id: str, name: str) -> None:
+        return None
+
+    async def due_for_verification(self, now: Any) -> list[str]:
+        return []
+
+    async def get_case_file(self, incident_id: str) -> Any:
+        from nightjar.api.repository import CaseFile
+
+        return CaseFile(
+            incident=self.incident,
+            evidence=self.evidence,
+            timeline=[],
+            plan=self.plan,
+            actions=self.actions,
+            action_states=dict(self.states),
+            executions=list(self.executions.values()),
+            verifications=self.verifications,
+        )
+
+    async def verify_chains(self, incident_id: str) -> Any:
+        from nightjar.core.models import ChainVerification
+
+        return (
+            ChainVerification(valid=True, checked=0),
+            ChainVerification(valid=True, checked=0),
+        )
 
 
 def manual_plan() -> tuple[Incident, ActionPlan]:
@@ -174,3 +226,157 @@ async def test_a_manual_action_pauses_the_incident_without_executing(
     )
     assert required["manual"]["dashboard_url"] == "https://dashboard.stripe.com/apikeys"
     assert KEY not in str(required)
+
+
+class FakeVerifier:
+    def __init__(self, passed: bool) -> None:
+        self.passed = passed
+
+    async def run(
+        self,
+        predicate: VerificationPredicate,
+        *,
+        incident_id: str,
+        action_id: str | None,
+    ) -> VerificationResult:
+        return VerificationResult(
+            incident_id=incident_id,
+            action_id=action_id,
+            predicate_id=predicate.id,
+            kind=predicate.kind,
+            passed=self.passed,
+            observed={"status": 401 if self.passed else 403},
+            phase="t0",
+            required=True,
+        )
+
+
+def build_service(
+    monkeypatch: pytest.MonkeyPatch, *, passed: bool
+) -> tuple[IncidentService, FakeRepo]:
+    monkeypatch.setenv("NIGHTJAR_TEST_STRIPE_KEY", KEY)
+    incident, plan = manual_plan()
+    repo = FakeRepo(incident, plan, plan.actions)
+    service = IncidentService(
+        settings=Settings(_env_file=None, stability_seconds=0),
+        repository=cast("Any", repo),
+        runtime=MockAgentRuntime(),
+        registry=ConnectorRegistry([StripeConnector(None)]),
+    )
+    service.verifier = FakeVerifier(passed)  # type: ignore[assignment]
+    return service, repo
+
+
+async def test_attestation_records_evidence_and_resolves_only_when_the_probe_passes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    service, repo = build_service(monkeypatch, passed=True)
+    action = repo.actions[0]
+    await service._execute_and_verify(repo.incident.id)
+
+    await service.attest_manual_step(
+        repo.incident.id, action.id, actor="alice", note="expired in the Dashboard"
+    )
+
+    assert repo.states[action.id] is ActionStatus.ATTESTED
+    assert repo.incident.status is IncidentStatus.RESOLVED
+    assert repo.verifications[-1].passed is True
+    note = next(item for item in repo.evidence if item.kind is EvidenceKind.HUMAN_NOTE)
+    assert note.collected_by == "alice"
+    assert note.content["note"] == "expired in the Dashboard"
+    assert note.content["fingerprint"]
+    event_types = [event_type for event_type, _ in repo.events]
+    assert EventType.MANUAL_STEP_ATTESTED in event_types
+
+
+async def test_a_false_attestation_reopens_the_incident_and_can_be_retried(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    service, repo = build_service(monkeypatch, passed=False)
+    action = repo.actions[0]
+    await service._execute_and_verify(repo.incident.id)
+
+    await service.attest_manual_step(repo.incident.id, action.id, actor="alice")
+
+    assert repo.incident.status is IncidentStatus.REOPENED
+    assert repo.reopens == 1
+    assert repo.verifications[-1].passed is False
+
+    # The operator really expires the key and attests again.
+    service.verifier = FakeVerifier(True)  # type: ignore[assignment]
+    await service.attest_manual_step(repo.incident.id, action.id, actor="alice")
+
+    assert repo.incident.status is IncidentStatus.RESOLVED
+    assert repo.verifications[-1].passed is True
+
+
+async def test_an_automated_action_cannot_be_attested(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    service, repo = build_service(monkeypatch, passed=True)
+    action = repo.actions[0]
+
+    with pytest.raises(ConflictError, match="not awaiting a manual step"):
+        await service.attest_manual_step(repo.incident.id, action.id, actor="alice")
+
+
+async def test_the_case_file_exposes_the_manual_step_and_its_proof_target(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from nightjar.api.repository import CaseFile
+    from nightjar.api.routers.incidents import _manual_steps
+
+    service, repo = build_service(monkeypatch, passed=True)
+    await service._execute_and_verify(repo.incident.id)
+    case = CaseFile(
+        incident=repo.incident,
+        actions=repo.actions,
+        action_states=repo.states,
+        executions=list(repo.executions.values()),
+    )
+
+    steps = _manual_steps(case)
+
+    assert len(steps) == 1
+    assert steps[0].provider == "stripe"
+    assert steps[0].state is ActionStatus.AWAITING_MANUAL
+    assert steps[0].auth == "basic"
+    assert steps[0].probe_url.endswith("/v1/balance")
+    assert steps[0].instructions
+    assert KEY not in steps[0].model_dump_json()
+
+
+def test_the_manual_step_api_lists_the_step_and_attests_it(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import asyncio
+
+    from fastapi.testclient import TestClient
+
+    from nightjar.api.main import create_app
+
+    service, repo = build_service(monkeypatch, passed=True)
+    action = repo.actions[0]
+    asyncio.run(service._execute_and_verify(repo.incident.id))
+    app = create_app(Settings(_env_file=None, stability_seconds=0), service=service)
+
+    with TestClient(app) as client:
+        listed = client.get(f"/v1/incidents/{repo.incident.id}/manual-steps")
+        assert listed.status_code == 200
+        steps = listed.json()
+        assert len(steps) == 1
+        assert steps[0]["provider"] == "stripe"
+        assert steps[0]["state"] == "awaiting_manual"
+        assert steps[0]["instructions"]
+
+        attested = client.post(
+            f"/v1/incidents/{repo.incident.id}/manual-steps/{action.id}/attest",
+            json={"note": "expired in the Dashboard"},
+            headers={"x-nightjar-actor": "alice"},
+        )
+
+    assert attested.status_code == 200
+    body = attested.json()
+    assert body["incident"]["status"] == "resolved"
+    assert body["manual_steps"][0]["state"] == "attested"
+    assert any(item["kind"] == "human_note" for item in body["evidence"])

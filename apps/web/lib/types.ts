@@ -30,6 +30,7 @@ export type ActionStatus =
   | "denied"
   | "awaiting_approval"
   | "awaiting_manual"
+  | "attested"
   | "approved"
   | "executing"
   | "executed"
@@ -206,6 +207,22 @@ export interface ChainStatus {
   broken_at: string | null;
 }
 
+export interface ManualStep {
+  action_id: string;
+  action_type: string;
+  target: string;
+  description: string;
+  risk: RiskClass;
+  state: ActionStatus;
+  provider: string;
+  title: string;
+  instructions: string[];
+  dashboard_url: string;
+  fingerprint: string;
+  probe_url: string;
+  auth: string;
+}
+
 export interface CaseFile {
   incident: Incident;
   evidence: EvidenceItem[];
@@ -213,6 +230,7 @@ export interface CaseFile {
   plan: ActionPlan | null;
   actions: ActionSpec[];
   action_states: Record<string, ActionStatus>;
+  manual_steps: ManualStep[];
   approvals: ApprovalRequest[];
   verifications: VerificationResult[];
   executions: ActionExecution[];

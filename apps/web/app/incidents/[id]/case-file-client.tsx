@@ -19,6 +19,7 @@ import { PlanPanel, VerificationPanel } from "@/components/case/plan-panel";
 import { EvidenceLedger } from "@/components/case/evidence-ledger";
 import { Timeline } from "@/components/case/timeline";
 import { ApprovalPanel } from "@/components/case/approval-panel";
+import { ManualStepPanel } from "@/components/case/manual-step-panel";
 import {
   AgentRunsPanel,
   ChainPanel,
@@ -35,6 +36,7 @@ import {
   IconCheck,
   IconClock,
   IconDatabase,
+  IconKey,
   IconRefresh,
   IconSearch,
   IconShield,
@@ -338,6 +340,24 @@ export function CaseFileClient({ incidentId }: { incidentId: string }) {
               <PlanPanel caseFile={caseFile} />
             </div>
           </section>
+
+          {caseFile.manual_steps.length > 0 && (
+            <section className="panel p-4 sm:p-5">
+              <div className="flex items-center justify-between gap-3">
+                <SectionLabel className="flex-1">
+                  <span className="inline-flex items-center gap-1.5">
+                    <IconKey className="h-3 w-3" /> Manual step
+                  </span>
+                </SectionLabel>
+                <span className="mono ml-3 text-[10px] text-[var(--color-amber)]">
+                  resolution blocked
+                </span>
+              </div>
+              <div className="mt-3">
+                <ManualStepPanel caseFile={caseFile} onChanged={reload} />
+              </div>
+            </section>
+          )}
 
           <section className="panel p-4 sm:p-5">
             <div className="flex items-center justify-between gap-3">

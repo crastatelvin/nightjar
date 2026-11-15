@@ -65,6 +65,26 @@ class NoteCreate(BaseModel):
     body: str = Field(min_length=1, max_length=10000)
 
 
+class ManualStepAttest(BaseModel):
+    note: str = Field(default="", max_length=2000)
+
+
+class ManualStepView(BaseModel):
+    action_id: str
+    action_type: str
+    target: str
+    description: str
+    risk: str
+    state: ActionStatus
+    provider: str
+    title: str
+    instructions: list[str]
+    dashboard_url: str = ""
+    fingerprint: str = ""
+    probe_url: str = ""
+    auth: str = "bearer"
+
+
 class ChainStatus(BaseModel):
     evidence_valid: bool
     timeline_valid: bool
@@ -80,6 +100,7 @@ class CaseFileResponse(BaseModel):
     plan: ActionPlan | None = None
     actions: list[ActionSpec]
     action_states: dict[str, ActionStatus]
+    manual_steps: list[ManualStepView] = Field(default_factory=list)
     approvals: list[ApprovalRequest]
     verifications: list[VerificationResult]
     executions: list[ActionExecution]
@@ -140,6 +161,8 @@ __all__ = [
     "IncidentCreate",
     "IncidentList",
     "IncidentListItem",
+    "ManualStepAttest",
+    "ManualStepView",
     "MetaInfo",
     "NoteCreate",
     "ProviderHealth",

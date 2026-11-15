@@ -102,6 +102,11 @@ the human acted. Stripe key expiry is the first such step; its probe presents th
 key with Basic auth, because Stripe would reject a live key sent as a Bearer
 token and a false `401` would look like a revocation.
 
+Attestation is evidence, not authority. A human completing a manual step records
+a `human_note` evidence item, but the service then runs the same verification
+path; a failed predicate reopens the incident and the step can be attested again
+after the real fix.
+
 The Google Workspace connector uses a service account with domain-wide
 delegation and impersonates one managed mailbox per request, so Nightjar never
 holds a user password or refresh token. Quarantine is a label plus removal from

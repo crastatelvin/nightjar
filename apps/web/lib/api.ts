@@ -100,6 +100,12 @@ export const api = {
       headers: { "x-nightjar-actor": getActor() },
       body: JSON.stringify({ approved, comment }),
     }),
+  attestManualStep: (incidentId: string, actionId: string, note: string) =>
+    request<CaseFile>(`/v1/incidents/${incidentId}/manual-steps/${actionId}/attest`, {
+      method: "POST",
+      headers: { "x-nightjar-actor": getActor() },
+      body: JSON.stringify({ note }),
+    }),
   addNote: (incidentId: string, body: string) =>
     request<CaseFile>(`/v1/incidents/${incidentId}/notes`, {
       method: "POST",

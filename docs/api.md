@@ -116,8 +116,9 @@ Query: `status`, `limit` (default 50), `offset`.
 ### `GET /v1/incidents/{id}`
 
 Returns the full case file: incident, evidence, timeline, plan, actions, action
-states, approvals, verifications, executions, agent runs, notes, findings, and
-chain status.
+states, `manual_steps`, approvals, verifications, executions, agent runs, notes,
+findings, and chain status. A manual step carries its provider, fingerprint,
+instructions, and the probe target, but never the credential value.
 
 ### `GET /v1/incidents/{id}/timeline?after_seq=N`
 
@@ -162,6 +163,34 @@ older plans remain in history.
 
 Query: `phase=t0|stability`. Runs required predicates immediately and applies
 the same resolve/reopen rules.
+
+## Manual steps
+
+A provider with no API for a fix (Stripe key expiry) produces a manual step. The
+incident moves to `awaiting_manual` and cannot resolve until the verification
+predicate passes.
+
+### `GET /v1/incidents/{id}/manual-steps`
+
+Lists every manual action with its state (`awaiting_manual` or `attested`),
+instructions, dashboard URL, fingerprint, and probe URL.
+
+### `POST /v1/incidents/{id}/manual-steps/{action_id}/attest`
+
+Header `x-nightjar-actor: alice`.
+
+```json
+{"note": "Expired the checkout key in the Dashboard."}
+```
+
+- `200` — attestation recorded as `human_note` evidence and the required
+  predicates run; returns the case file. A failed predicate reopens the incident
+  and the step can be attested again.
+- `404` — the action is not part of this incident.
+- `409` — the action is not awaiting a manual step, or it is already attested
+  and the incident has not reopened.
+
+Attestation is evidence, not authority: it never resolves an incident by itself.
 
 ## Approvals
 

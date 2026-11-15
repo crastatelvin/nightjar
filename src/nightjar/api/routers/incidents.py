@@ -10,9 +10,9 @@ from fastapi.responses import StreamingResponse
 
 from nightjar.api import schemas
 from nightjar.api.deps import actor, get_service, require_auth
-from nightjar.api.repository import CaseFile, NotFoundError
+from nightjar.api.repository import CaseFile, ConflictError, NotFoundError
 from nightjar.api.service import IncidentService
-from nightjar.core.enums import IncidentStatus
+from nightjar.core.enums import ActionStatus, IncidentStatus
 from nightjar.core.ids import utcnow
 from nightjar.core.models import Incident
 
@@ -21,6 +21,42 @@ router = APIRouter(
     tags=["incidents"],
     dependencies=[Depends(require_auth)],
 )
+
+
+def _manual_steps(case: CaseFile) -> list[schemas.ManualStepView]:
+    executions = {
+        execution.action_id: execution
+        for execution in case.executions
+        if execution.after_state.get("provider")
+    }
+    steps: list[schemas.ManualStepView] = []
+    for action in case.actions:
+        state = case.action_states.get(action.id)
+        execution = executions.get(action.id)
+        if execution is None or state not in {
+            ActionStatus.AWAITING_MANUAL,
+            ActionStatus.ATTESTED,
+        }:
+            continue
+        manual = execution.after_state
+        steps.append(
+            schemas.ManualStepView(
+                action_id=action.id,
+                action_type=action.action_type.value,
+                target=action.target,
+                description=action.description,
+                risk=action.risk.value,
+                state=state,
+                provider=str(manual.get("provider", "")),
+                title=str(manual.get("title", "")),
+                instructions=[str(item) for item in manual.get("instructions", [])],
+                dashboard_url=str(manual.get("dashboard_url", "")),
+                fingerprint=str(manual.get("fingerprint", "")),
+                probe_url=str(manual.get("probe_url", "")),
+                auth=str(manual.get("auth", "bearer")),
+            )
+        )
+    return steps
 
 
 def _case_response(
@@ -38,6 +74,7 @@ def _case_response(
         plan=case.plan,
         actions=case.actions,
         action_states=case.action_states,
+        manual_steps=_manual_steps(case),
         approvals=case.approvals,
         verifications=case.verifications,
         executions=case.executions,
@@ -110,6 +147,43 @@ async def get_incident(
     incident_id: str,
     service: Annotated[IncidentService, Depends(get_service)],
 ) -> schemas.CaseFileResponse:
+    return await _load_case(service, incident_id)
+
+
+@router.get(
+    "/{incident_id}/manual-steps",
+    response_model=list[schemas.ManualStepView],
+)
+async def list_manual_steps(
+    incident_id: str,
+    service: Annotated[IncidentService, Depends(get_service)],
+) -> list[schemas.ManualStepView]:
+    case = await _load_case(service, incident_id)
+    return case.manual_steps
+
+
+@router.post(
+    "/{incident_id}/manual-steps/{action_id}/attest",
+    response_model=schemas.CaseFileResponse,
+)
+async def attest_manual_step(
+    incident_id: str,
+    action_id: str,
+    payload: schemas.ManualStepAttest,
+    service: Annotated[IncidentService, Depends(get_service)],
+    attested_by: Annotated[str, Depends(actor)],
+) -> schemas.CaseFileResponse:
+    try:
+        await service.attest_manual_step(
+            incident_id,
+            action_id,
+            actor=attested_by,
+            note=payload.note,
+        )
+    except NotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     return await _load_case(service, incident_id)
 
 

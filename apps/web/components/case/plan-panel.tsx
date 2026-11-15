@@ -24,6 +24,8 @@ const ACTION_TONE: Record<ActionStatus, string> = {
     "text-[var(--color-amber)] border-[rgba(255,196,107,0.3)] bg-[rgba(255,196,107,0.06)]",
   awaiting_manual:
     "text-[var(--color-amber)] border-[rgba(255,196,107,0.3)] bg-[rgba(255,196,107,0.06)]",
+  attested:
+    "text-[var(--color-acid)] border-[rgba(200,255,114,0.24)] bg-[rgba(200,255,114,0.05)]",
   failed: "text-[var(--color-danger)] border-[rgba(255,111,97,0.32)] bg-[rgba(255,111,97,0.07)]",
   denied: "text-[var(--color-danger)] border-[rgba(255,111,97,0.28)]",
   proposed: "text-[var(--color-dim)] border-[var(--color-line)]",

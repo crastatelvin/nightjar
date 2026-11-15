@@ -135,7 +135,9 @@ step that is still verified.
    and Microsoft sessions are open. ✅ Stripe has no public revoke API, so it is
    a typed manual step: Nightjar shows the exact Dashboard action and fingerprint,
    pauses the incident, and resolves only after the exposed key returns a `401`
-   (Basic auth, because a live key would also reject Bearer).
+   (Basic auth, because a live key would also reject Bearer). ✅ Manual steps are
+   visible in the case file, attestation is recorded as `human_note` evidence,
+   and the predicate — not the human's word — decides resolution.
 4. **Mail containment.** ✅ Google Workspace labels and filters, read back before
    the incident can resolve. Microsoft 365 message move, inbox rules, and
    session revocation are open.

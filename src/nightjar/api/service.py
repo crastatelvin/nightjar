@@ -682,6 +682,7 @@ class IncidentService:
                 ActionStatus.APPROVED,
                 ActionStatus.EXECUTED,
                 ActionStatus.AWAITING_MANUAL,
+                ActionStatus.ATTESTED,
             }
         ]
         if not_ready:
@@ -700,6 +701,7 @@ class IncidentService:
             if states.get(action.id) in {
                 ActionStatus.EXECUTED,
                 ActionStatus.AWAITING_MANUAL,
+                ActionStatus.ATTESTED,
             }:
                 continue
             manual = self.registry.manual_step(action)
@@ -856,6 +858,86 @@ class IncidentService:
             if incident.status is IncidentStatus.AWAITING_APPROVAL:
                 await self._execute_and_verify(approval.incident_id)
             return await self.repo.get_case_file(approval.incident_id)
+
+    # ------------------------------------------------------------- manual steps
+    async def attest_manual_step(
+        self,
+        incident_id: str,
+        action_id: str,
+        *,
+        actor: str,
+        note: str = "",
+    ) -> None:
+        """Record a human's claim and let verification decide whether it is true.
+
+        Attestation is evidence, not authority. It never resolves an incident by
+        itself: the required predicate still has to pass, and a failed predicate
+        reopens the incident.
+        """
+        async with self._lock(incident_id):
+            incident = await self.repo.get_incident(incident_id)
+            states = await self.repo.action_states(incident_id)
+            state = states.get(action_id)
+            if state is None:
+                raise NotFoundError(f"action {action_id} is not part of this incident")
+            if state not in {ActionStatus.AWAITING_MANUAL, ActionStatus.ATTESTED}:
+                raise ConflictError(f"action is {state.value}, not awaiting a manual step")
+            if state is ActionStatus.ATTESTED and incident.status is not IncidentStatus.REOPENED:
+                raise ConflictError("manual step is already attested")
+
+            actions = await self.repo.list_actions(incident_id)
+            action = next((item for item in actions if item.id == action_id), None)
+            if action is None:
+                raise NotFoundError(f"action {action_id} is not part of this incident")
+
+            manual: dict[str, Any] | None = None
+            for execution in reversed(await self.repo.list_executions(incident_id)):
+                if execution.action_id == action_id and execution.after_state.get("provider"):
+                    manual = execution.after_state
+                    break
+            if manual is None:
+                raise ConflictError("no manual instructions are recorded for this action")
+
+            evidence = await self.repo.append_evidence(
+                EvidenceItem(
+                    incident_id=incident_id,
+                    kind=EvidenceKind.HUMAN_NOTE,
+                    source=f"operator:{actor}",
+                    summary=(
+                        f"Manual step attested: {manual.get('title') or action.action_type.value}"
+                    ),
+                    content={
+                        "action_id": action_id,
+                        "action_type": action.action_type.value,
+                        "provider": manual.get("provider"),
+                        "fingerprint": manual.get("fingerprint"),
+                        "dashboard_url": manual.get("dashboard_url"),
+                        "note": note,
+                    },
+                    collected_by=actor,
+                )
+            )
+            await self.repo.set_action_status(action_id, ActionStatus.ATTESTED)
+            await self.repo.append_event(
+                incident_id,
+                EventType.MANUAL_STEP_ATTESTED,
+                actor=actor,
+                payload={
+                    "action_id": action_id,
+                    "evidence_id": evidence.id,
+                    "note": note,
+                },
+            )
+
+            remaining = [
+                item
+                for item in actions
+                if item.id != action_id and states.get(item.id) is ActionStatus.AWAITING_MANUAL
+            ]
+            if remaining:
+                return
+            # The human's word is not proof. Run the required predicates.
+            await self._verify(incident_id, phase="t0")
 
     # -------------------------------------------------------------- verification
     async def _verify(self, incident_id: str, *, phase: str) -> bool:

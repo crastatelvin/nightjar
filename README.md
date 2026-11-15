@@ -296,7 +296,8 @@ Real and exercised end to end:
 - Stripe assisted revocation: the Dashboard-only step is surfaced with the key's
   fingerprint, the action is `awaiting_manual` rather than "executed", and the
   incident cannot resolve until the exposed key returns a `401` (a `403` proves
-  the key is still live);
+  the key is still live). The case file shows the step, records the operator's
+  attestation as evidence, and still lets verification decide;
 - Gmail quarantine and sender blocking through a delegated service account: the
   message must carry the quarantine label and be out of the inbox, and the filter is
   read back, before the incident resolves;

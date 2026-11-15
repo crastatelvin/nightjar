@@ -1053,7 +1053,7 @@ Workspace; Microsoft 365 (6.10) and the deploy connectors are open.
 | 6.17 ✅ | Managed target allowlist in policy + Rego parity | `core/policy.py`, `policies/nightjar.rego`, tests | unmanaged target denied in both engines | 8 |
 | 6.18 ✅ | Availability-aware planner + `ActionUnavailable` | `agents/prompts.py`, `core/actions.py`, tests | unavailable action rejected pre-policy | 6 |
 | 6.19 | Required-predicate enforcement per class | `core/actions.py`, `agents/prompts.py`, tests | missing predicate → plan rejected | 4 |
-| 6.20 | Manual-step API + case-file panel | `api/routers/incidents.py`, `apps/web/components/case/*` | manual action blocks resolution until attested | 10 |
+| 6.20 ✅ | Manual-step API + case-file panel | `api/routers/incidents.py`, `apps/web/components/case/manual-step-panel.tsx` | manual action blocks resolution until attested | 10 |
 
 **Phase 6 total: ~161 h.**
 
