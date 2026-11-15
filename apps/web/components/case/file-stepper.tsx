@@ -21,6 +21,7 @@ function phaseIndex(caseFile: CaseFile): number {
   if (status === "intake") return 0;
   if (status === "investigating") return 1;
   if (status === "awaiting_approval") return 3;
+  if (status === "awaiting_manual") return 4;
   if (status === "executing") return 4;
   if (status === "verifying") return 5;
   if (["resolved", "reopened", "failed", "cancelled"].includes(status)) return 6;

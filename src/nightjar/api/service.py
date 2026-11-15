@@ -677,7 +677,12 @@ class IncidentService:
         not_ready = [
             action
             for action in actions
-            if states.get(action.id) not in {ActionStatus.APPROVED, ActionStatus.EXECUTED}
+            if states.get(action.id)
+            not in {
+                ActionStatus.APPROVED,
+                ActionStatus.EXECUTED,
+                ActionStatus.AWAITING_MANUAL,
+            }
         ]
         if not_ready:
             await self._fail(
@@ -690,8 +695,40 @@ class IncidentService:
         incident = await self._set_status(
             incident, IncidentStatus.EXECUTING, "all actions allowed or approved"
         )
+        manual_actions: list[ActionSpec] = []
         for action in actions:
-            if states.get(action.id) is ActionStatus.EXECUTED:
+            if states.get(action.id) in {
+                ActionStatus.EXECUTED,
+                ActionStatus.AWAITING_MANUAL,
+            }:
+                continue
+            manual = self.registry.manual_step(action)
+            if manual is not None:
+                # No mutation happens here. The provider has no API for it, so
+                # Nightjar records the human step and refuses to resolve until
+                # the verification predicate passes.
+                execution = await self.repo.record_execution_start(
+                    incident_id,
+                    action,
+                    before_state={"action": action.action_type.value, "target": action.target},
+                )
+                await self.repo.record_execution_finish(
+                    execution.id,
+                    status=ActionStatus.AWAITING_MANUAL,
+                    after_state=manual.as_dict(),
+                )
+                await self.repo.set_action_status(action.id, ActionStatus.AWAITING_MANUAL)
+                await self.repo.append_event(
+                    incident_id,
+                    EventType.MANUAL_STEP_REQUIRED,
+                    actor="executor",
+                    payload={
+                        "action_id": action.id,
+                        "action_type": action.action_type.value,
+                        "manual": manual.as_dict(),
+                    },
+                )
+                manual_actions.append(action)
                 continue
             execution = await self.repo.record_execution_start(
                 incident_id,
@@ -744,6 +781,14 @@ class IncidentService:
                     "result": result,
                 },
             )
+        if manual_actions:
+            await self._set_status(
+                incident,
+                IncidentStatus.AWAITING_MANUAL,
+                f"{len(manual_actions)} manual step(s) require a human; "
+                "verification runs after attestation",
+            )
+            return
         await self._verify(incident_id, phase="t0")
 
     # ---------------------------------------------------------------- approvals

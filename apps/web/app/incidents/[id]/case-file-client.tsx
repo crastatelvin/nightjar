@@ -129,6 +129,7 @@ export function CaseFileClient({ incidentId }: { incidentId: string }) {
     "intake",
     "investigating",
     "awaiting_approval",
+    "awaiting_manual",
     "executing",
     "verifying",
   ].includes(incident.status);

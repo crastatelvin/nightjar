@@ -293,6 +293,10 @@ Real and exercised end to end:
   the incident resolves;
 - GitHub credential revocation, verified by presenting the token and requiring a `401`:
   a `202` from GitHub only means the request was queued, so it is never treated as proof;
+- Stripe assisted revocation: the Dashboard-only step is surfaced with the key's
+  fingerprint, the action is `awaiting_manual` rather than "executed", and the
+  incident cannot resolve until the exposed key returns a `401` (a `403` proves
+  the key is still live);
 - Gmail quarantine and sender blocking through a delegated service account: the
   message must carry the quarantine label and be out of the inbox, and the filter is
   read back, before the incident resolves;

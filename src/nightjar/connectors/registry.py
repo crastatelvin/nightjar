@@ -3,7 +3,13 @@ from __future__ import annotations
 from typing import Any
 
 from nightjar.api.settings import Settings
-from nightjar.connectors.base import CheckFn, Connector, ConnectorError, ToolResult
+from nightjar.connectors.base import (
+    CheckFn,
+    Connector,
+    ConnectorError,
+    ManualStep,
+    ToolResult,
+)
 from nightjar.connectors.cloudflare import CloudflareConnector
 from nightjar.connectors.fly import FlyConnector
 from nightjar.connectors.github import GitHubConnector
@@ -11,6 +17,7 @@ from nightjar.connectors.google_workspace import GoogleWorkspaceConnector
 from nightjar.connectors.http import HttpConnector
 from nightjar.connectors.lab import LabConnector
 from nightjar.connectors.render import RenderConnector
+from nightjar.connectors.stripe import StripeConnector
 from nightjar.connectors.vercel import VercelConnector
 from nightjar.connectors.webhook import WebhookConnector
 from nightjar.core.actions import validate_action
@@ -80,6 +87,34 @@ class ConnectorRegistry:
             if action_type in connector.action_types
         )
 
+    def manual_step(self, action: ActionSpec) -> ManualStep | None:
+        """Return instructions when this action is manual at its provider.
+
+        A connector that advertises ``automated=False`` must be able to describe
+        the human step. If it cannot, the plan is not executable and the caller
+        must fail closed rather than guess.
+        """
+        connector = self.connector_for(action)
+        capability = next(
+            (item for item in connector.capabilities() if item.action_type is action.action_type),
+            None,
+        )
+        if capability is None:
+            raise ConnectorError(
+                f"connector {connector.name!r} implements {action.action_type.value} "
+                "without advertising a capability"
+            )
+        if capability.automated:
+            return None
+        describe = getattr(connector, "manual_step", None)
+        if describe is None:
+            raise ConnectorError(
+                f"connector {connector.name!r} advertises {action.action_type.value} as "
+                "manual but cannot describe the step"
+            )
+        step: ManualStep = describe(action)
+        return step
+
     async def execute(self, action: ActionSpec) -> dict[str, Any]:
         validate_action(action)
         connector = self.connector_for(action)
@@ -137,6 +172,13 @@ def build_registry(settings: Settings) -> ConnectorRegistry:
                 settings.fly_api_token,
                 base_url=settings.fly_api_url,
                 app=settings.fly_app,
+            )
+        )
+    if settings.stripe_secret_key:
+        real.append(
+            StripeConnector(
+                settings.stripe_secret_key,
+                base_url=settings.stripe_api_url,
             )
         )
     if settings.google_service_account_file:

@@ -74,6 +74,35 @@ class CapabilityReport:
         }
 
 
+@dataclass(frozen=True)
+class ManualStep:
+    """A provider action a human must perform, with machine-checkable proof.
+
+    Nightjar does not pretend to execute these. The service records the
+    instructions, moves the incident to ``awaiting_manual``, and refuses to
+    resolve until the verification predicate passes.
+    """
+
+    provider: str
+    title: str
+    instructions: tuple[str, ...]
+    dashboard_url: str = ""
+    fingerprint: str = ""
+    probe_url: str = ""
+    auth: str = "bearer"
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "provider": self.provider,
+            "title": self.title,
+            "instructions": list(self.instructions),
+            "dashboard_url": self.dashboard_url,
+            "fingerprint": self.fingerprint,
+            "probe_url": self.probe_url,
+            "auth": self.auth,
+        }
+
+
 @dataclass
 class ToolResult:
     kind: EvidenceKind

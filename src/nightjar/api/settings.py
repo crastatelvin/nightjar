@@ -113,6 +113,8 @@ class Settings(BaseSettings):
     fly_api_token: str | None = None
     fly_api_url: str = "https://api.machines.dev"
     fly_app: str | None = None
+    stripe_secret_key: str | None = None
+    stripe_api_url: str = "https://api.stripe.com"
     google_service_account_file: str | None = None
     google_api_url: str = "https://gmail.googleapis.com"
     google_oauth_url: str = "https://oauth2.googleapis.com/token"

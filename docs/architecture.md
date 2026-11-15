@@ -95,6 +95,13 @@ configured connector that implements an action before policy runs, so the
 provider policy authorizes is the provider that executes. If two connectors
 could do it and the plan named neither, the incident fails before approval.
 
+Some fixes have no API. A capability can declare `automated=False`, and the
+service then records the human step instead of calling `execute`: the action
+becomes `awaiting_manual`, the incident pauses, and verification is what proves
+the human acted. Stripe key expiry is the first such step; its probe presents the
+key with Basic auth, because Stripe would reject a live key sent as a Bearer
+token and a false `401` would look like a revocation.
+
 The Google Workspace connector uses a service account with domain-wide
 delegation and impersonates one managed mailbox per request, so Nightjar never
 holds a user password or refresh token. Quarantine is a label plus removal from

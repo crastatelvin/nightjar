@@ -511,7 +511,9 @@ export default function StudioPage() {
                 <p className="mt-2 text-[9.5px] leading-relaxed text-[var(--color-dim)]">
                   {result.incident.status === "awaiting_approval"
                     ? "This action is R2. The loop is paused until you approve or reject it in the case file."
-                    : "The loop continues in the background. The case file streams every new event."}
+                    : result.incident.status === "awaiting_manual"
+                      ? "This provider has no API for the fix. Open the case file for the exact step; resolution waits for proof."
+                      : "The loop continues in the background. The case file streams every new event."}
                 </p>
               </div>
             )}
@@ -706,6 +708,7 @@ function reachedIndex(status: string): number {
   if (status === "intake") return 0;
   if (status === "investigating") return 2;
   if (status === "awaiting_approval") return 3;
+  if (status === "awaiting_manual") return 5;
   if (status === "executing") return 5;
   if (status === "verifying" || status === "resolved" || status === "reopened") return 6;
   if (status === "failed") return 5;

@@ -82,6 +82,7 @@ export const STATUS_LABEL: Record<IncidentStatus, string> = {
   intake: "Intake",
   investigating: "Investigating",
   awaiting_approval: "Awaiting decision",
+  awaiting_manual: "Awaiting manual step",
   executing: "Executing",
   verifying: "Verifying",
   resolved: "Resolved",
@@ -97,6 +98,7 @@ export const STATUS_TONE: Record<
   intake: "live",
   investigating: "live",
   awaiting_approval: "wait",
+  awaiting_manual: "wait",
   executing: "live",
   verifying: "live",
   resolved: "good",
@@ -121,9 +123,14 @@ export const CLASS_ICON: Record<IncidentClass, string> = {
 };
 
 export function isActive(status: IncidentStatus): boolean {
-  return ["intake", "investigating", "awaiting_approval", "executing", "verifying"].includes(
-    status,
-  );
+  return [
+    "intake",
+    "investigating",
+    "awaiting_approval",
+    "awaiting_manual",
+    "executing",
+    "verifying",
+  ].includes(status);
 }
 
 export function classLabel(value: IncidentClass): string {

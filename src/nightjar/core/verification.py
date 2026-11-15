@@ -227,19 +227,31 @@ class CredentialCheck:
         except SecretError as exc:
             raise VerificationError(str(exc)) from exc
         expected_status = int(predicate.params.get("revoked_status", 401))
+        auth = str(predicate.params.get("auth", "bearer")).lower()
+        if auth not in {"bearer", "basic"}:
+            raise VerificationError(
+                f"credential check auth must be 'bearer' or 'basic', got {auth!r}"
+            )
         try:
             async with httpx.AsyncClient(
                 timeout=self.timeout,
                 follow_redirects=False,
                 headers={"user-agent": "nightjar-verifier/0.1"},
             ) as client:
-                response = await client.get(url, headers={"authorization": f"Bearer {raw}"})
+                if auth == "basic":
+                    # Stripe (and others) authenticate with the key as the Basic
+                    # username. Sending it as a bearer token would be rejected
+                    # even while the key is live, which would fake a revocation.
+                    response = await client.get(url, auth=httpx.BasicAuth(raw, ""))
+                else:
+                    response = await client.get(url, headers={"authorization": f"Bearer {raw}"})
         except httpx.HTTPError as exc:
             raise VerificationError(f"credential probe failed: {exc}") from exc
         return {
             "url": url,
             "status": response.status_code,
             "revoked_status": expected_status,
+            "auth": auth,
             "fingerprint": fingerprint(raw),
             "passed": response.status_code == expected_status,
         }

@@ -132,8 +132,10 @@ step that is still verified.
    registry are open.
 3. **Credential revocation.** ✅ GitHub PAT/OAuth/App tokens via the
    unauthenticated revocation API, proven dead by a `401` probe. Google OAuth
-   and Microsoft sessions are open. Stripe has no public revoke API, so it
-   becomes a manual step whose completion is proven by a `401` probe.
+   and Microsoft sessions are open. ✅ Stripe has no public revoke API, so it is
+   a typed manual step: Nightjar shows the exact Dashboard action and fingerprint,
+   pauses the incident, and resolves only after the exposed key returns a `401`
+   (Basic auth, because a live key would also reject Bearer).
 4. **Mail containment.** ✅ Google Workspace labels and filters, read back before
    the incident can resolve. Microsoft 365 message move, inbox rules, and
    session revocation are open.

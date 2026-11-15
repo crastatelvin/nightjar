@@ -51,7 +51,7 @@ const FILTERS: Array<{ id: Filter; label: string }> = [
 function matchesFilter(status: IncidentStatus, filter: Filter): boolean {
   if (filter === "all") return true;
   if (filter === "active") return isActive(status);
-  if (filter === "awaiting") return status === "awaiting_approval";
+  if (filter === "awaiting") return ["awaiting_approval", "awaiting_manual"].includes(status);
   if (filter === "closed") return ["resolved", "failed", "cancelled"].includes(status);
   return status === "reopened";
 }
@@ -88,7 +88,9 @@ export default function DashboardPage() {
       setData(list);
       setFailed(false);
 
-      const awaiting = list.items.filter((item) => item.status === "awaiting_approval").slice(0, 3);
+      const awaiting = list.items
+        .filter((item) => ["awaiting_approval", "awaiting_manual"].includes(item.status))
+        .slice(0, 3);
       const resolved = list.items.find((item) => item.status === "resolved");
       const nextSignature = [
         ...awaiting.map((item) => `${item.id}:${item.updated_at}`),
@@ -130,7 +132,9 @@ export default function DashboardPage() {
   const items = data?.items ?? [];
   const stats = useMemo(() => {
     const active = items.filter((item) => isActive(item.status));
-    const awaiting = items.filter((item) => item.status === "awaiting_approval");
+    const awaiting = items.filter((item) =>
+      ["awaiting_approval", "awaiting_manual"].includes(item.status),
+    );
     const resolved24 = items.filter(
       (item) =>
         item.status === "resolved" &&

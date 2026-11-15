@@ -331,14 +331,20 @@ explicitly unsupported in v1.
 Stripe has **no public API to expire, delete, or rotate a secret or restricted
 key**. Key lifecycle is Dashboard-only. Nightjar must not pretend otherwise.
 
-**Design.** `revoke_credential` with `params.provider="stripe"` becomes a
-`MANUAL_STEP`:
+**Implementation.** `revoke_credential` with `params.connector="stripe"` is a
+manual step, not an automated action:
 
-1. Action record contains the exact Dashboard path
-   (`Developers → API keys → ⋯ → Expire key`), the key name, and the fingerprint.
-2. A `notify` action pages the operator.
-3. A `credential.rejected` predicate polls `GET https://api.stripe.com/v1/balance`
-   with the exposed key.
+1. The connector advertises `automated=False`. The service never calls
+   `execute`; it records the exact Dashboard path
+   (`Developers → API keys → ⋯ → Expire key`), the key name, and the fingerprint,
+   sets the action to `awaiting_manual`, and pauses the incident. A manual step
+   is never reported as executed.
+2. The exposed key is identified by fingerprint and last four characters, never
+   printed. The raw value is read from `credential_ref` only to compute those.
+3. A `credential` predicate presents the key to
+   `GET https://api.stripe.com/v1/balance` using HTTP Basic (the key is the
+   username). Bearer auth would be rejected even for a live key, which would fake
+   a revocation.
 
 | Response | Meaning | Predicate |
 |---|---|---|
@@ -1038,7 +1044,7 @@ Workspace; Microsoft 365 (6.10) and the deploy connectors are open.
 | 6.8 ✅ | `CredentialCheck` + `PredicateKind.CREDENTIAL` wiring | `core/verification.py`, `api/service.py`, tests | revoked → pass, live → fail, 403 → fail | 6 |
 | 6.9 ✅ | Google Workspace connector: quarantine + filter | `connectors/google_workspace.py`, tests | label present/INBOX absent; filter read back | 14 |
 | 6.10 | Microsoft 365 connector: move + rule + revoke sessions | `connectors/microsoft365.py`, tests | new message id handled; rule read back | 16 |
-| 6.11 | Stripe assisted revocation (`MANUAL_STEP` + probe) | `connectors/stripe.py`, `core/actions.py`, UI | manual step visible; 401 passes; 403 fails | 8 |
+| 6.11 ✅ | Stripe assisted revocation (`MANUAL_STEP` + probe) | `connectors/stripe.py`, `core/verification.py`, `api/service.py` | manual step visible; 401 passes; 403 fails | 8 |
 | 6.12 ✅ | Cloudflare Pages rollback + read-back checks | `connectors/cloudflare.py`, tests | production deployment id verified | 8 |
 | 6.13 ✅ | Vercel rollback + alias verification | `connectors/vercel.py`, tests | `READY`, alias present | 8 |
 | 6.14 ✅ | Render rollback/restart + autodeploy pause | `connectors/render.py`, tests | autodeploy off, deploy live | 8 |

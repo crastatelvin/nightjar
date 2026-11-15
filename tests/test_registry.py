@@ -236,3 +236,71 @@ def test_an_ambiguous_provider_is_reported_instead_of_guessed() -> None:
 
     assert bound[0].params.get("connector") is None
     assert ambiguous == ["purge_cache (fake-cdn, lab)"]
+
+
+def _stripe_action() -> ActionSpec:
+    return ActionSpec(
+        action_type=ActionType.REVOKE_CREDENTIAL,
+        target="cred-1",
+        params={
+            "connector": "stripe",
+            "credential_id": "cred-1",
+            "credential_ref": "env:NIGHTJAR_TEST_STRIPE_KEY",
+        },
+        risk=RiskClass.R2,
+    )
+
+
+def test_a_manual_capability_returns_the_human_step(monkeypatch: pytest.MonkeyPatch) -> None:
+    from nightjar.connectors.stripe import StripeConnector
+
+    monkeypatch.setenv("NIGHTJAR_TEST_STRIPE_KEY", "sk_live_example")
+    registry = ConnectorRegistry([StripeConnector(None)])
+
+    step = registry.manual_step(_stripe_action())
+
+    assert step is not None
+    assert step.provider == "stripe"
+    assert step.auth == "basic"
+
+
+def test_an_automated_action_has_no_manual_step() -> None:
+    registry = ConnectorRegistry([LabConnector("http://127.0.0.1:8100")])
+    assert registry.manual_step(purge("lab")) is None
+
+
+def test_a_manual_capability_without_instructions_fails_closed() -> None:
+    from nightjar.connectors.base import Capability
+
+    class SilentManualConnector:
+        name = "silent"
+        action_types = frozenset({ActionType.REVOKE_CREDENTIAL})
+        tool_names: frozenset[str] = frozenset()
+
+        async def execute(self, action: ActionSpec) -> dict[str, Any]:
+            raise AssertionError("must not execute")
+
+        async def collect(self, tool: str, params: dict[str, Any]) -> ToolResult:
+            raise AssertionError("must not collect")
+
+        def verification_checks(self) -> dict[str, Any]:
+            return {}
+
+        def capabilities(self) -> tuple[Capability, ...]:
+            return (
+                Capability(
+                    action_type=ActionType.REVOKE_CREDENTIAL,
+                    provider=self.name,
+                    automated=False,
+                ),
+            )
+
+        async def preflight(self, *, deep: bool = False) -> Any:
+            raise AssertionError("must not preflight")
+
+    registry = ConnectorRegistry([SilentManualConnector()])
+    action = _stripe_action()
+    action.params.pop("connector")
+
+    with pytest.raises(ConnectorError, match="cannot describe the step"):
+        registry.manual_step(action)
