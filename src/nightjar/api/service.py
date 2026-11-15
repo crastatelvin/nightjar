@@ -494,6 +494,33 @@ class IncidentService:
                 if verdict is not None:
                     claim.status = mapping.get(verdict.verdict.value, ClaimStatus.UNVERIFIED)
 
+    def _bind_providers(self, actions: list[ActionSpec]) -> tuple[list[ActionSpec], list[str]]:
+        """Turn configuration into an explicit provider on each action.
+
+        The planner names an action, not a vendor. When exactly one configured
+        connector implements it, that connector is bound here so policy resolves
+        the same target the executor will use. With more than one, the planner
+        has to say which, and the plan fails before approval rather than at
+        execution.
+        """
+        bound: list[ActionSpec] = []
+        ambiguous: list[str] = []
+        for action in actions:
+            if action.params.get("connector"):
+                bound.append(action)
+                continue
+            providers = self.registry.providers_for(action.action_type)
+            if len(providers) == 1:
+                bound.append(
+                    action.model_copy(
+                        update={"params": {**action.params, "connector": providers[0]}}
+                    )
+                )
+            else:
+                ambiguous.append(f"{action.action_type.value} ({', '.join(providers) or 'none'})")
+                bound.append(action)
+        return bound, ambiguous
+
     async def _plan(self, incident: Incident, bundle: Any) -> ActionPlan | None:
         outcome = await self.runtime.plan(
             PlanInput(
@@ -516,6 +543,14 @@ class IncidentService:
                 + "; ".join(unavailable),
             )
             return None
+        bound, ambiguous = self._bind_providers(plan.actions)
+        if ambiguous:
+            await self._fail(
+                incident.id,
+                "planner did not choose a provider for: " + "; ".join(ambiguous),
+            )
+            return None
+        plan = plan.model_copy(update={"actions": bound})
         if not plan.actions:
             await self._fail(
                 incident.id,

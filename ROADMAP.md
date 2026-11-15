@@ -137,10 +137,11 @@ step that is still verified.
 4. **Mail containment.** ✅ Google Workspace labels and filters, read back before
    the incident can resolve. Microsoft 365 message move, inbox rules, and
    session revocation are open.
-5. **Deploy and runtime.** ✅ Cloudflare Pages rollback, validated against a
-   successful production deployment and read back from the production list.
-   Vercel and Render rollback, and Fly/Render restart, are open. Render rollback
-   will also pause autodeploy, or the next push undoes it.
+5. **Deploy and runtime.** ✅ Cloudflare Pages and Vercel rollback, each validated
+   against a successful production deployment and read back from the provider
+   (Vercel also checks the production alias). Render rollback and Fly/Render
+   restart are open. Render rollback will also pause autodeploy, or the next push
+   undoes it.
 6. **Capability probe.** ✅ `nightjarctl doctor` and `GET /v1/meta/capabilities`
    so an operator sees which providers are live and which scopes are missing
    before an incident.

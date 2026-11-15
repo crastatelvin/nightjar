@@ -186,3 +186,53 @@ def test_every_registered_tool_and_check_name_is_unique() -> None:
     registry = build_registry(settings)
     tools = [tool for connector in registry.connectors for tool in connector.tool_names]
     assert len(tools) == len(set(tools))
+
+
+def test_providers_for_lists_every_capable_connector() -> None:
+    registry = ConnectorRegistry([LabConnector("http://127.0.0.1:8100"), FakeCacheConnector()])
+    assert registry.providers_for(ActionType.PURGE_CACHE) == ["fake-cdn", "lab"]
+    assert registry.providers_for(ActionType.NOTIFY) == []
+
+
+def test_an_unambiguous_provider_is_bound_to_the_action() -> None:
+    from typing import cast
+
+    from nightjar.agents.mock import MockAgentRuntime
+    from nightjar.api.service import IncidentService
+
+    service = IncidentService(
+        settings=Settings(_env_file=None),
+        repository=cast("Any", None),
+        runtime=MockAgentRuntime(),
+        registry=ConnectorRegistry([LabConnector("http://127.0.0.1:8100")]),
+    )
+    action = purge()
+    action.params.pop("connector", None)
+
+    bound, ambiguous = service._bind_providers([action])
+
+    assert ambiguous == []
+    assert bound[0].params["connector"] == "lab"
+    # The original action is not mutated.
+    assert "connector" not in action.params
+
+
+def test_an_ambiguous_provider_is_reported_instead_of_guessed() -> None:
+    from typing import cast
+
+    from nightjar.agents.mock import MockAgentRuntime
+    from nightjar.api.service import IncidentService
+
+    service = IncidentService(
+        settings=Settings(_env_file=None),
+        repository=cast("Any", None),
+        runtime=MockAgentRuntime(),
+        registry=ConnectorRegistry([LabConnector("http://127.0.0.1:8100"), FakeCacheConnector()]),
+    )
+    action = purge()
+    action.params.pop("connector", None)
+
+    bound, ambiguous = service._bind_providers([action])
+
+    assert bound[0].params.get("connector") is None
+    assert ambiguous == ["purge_cache (fake-cdn, lab)"]

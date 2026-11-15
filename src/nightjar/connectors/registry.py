@@ -9,8 +9,10 @@ from nightjar.connectors.github import GitHubConnector
 from nightjar.connectors.google_workspace import GoogleWorkspaceConnector
 from nightjar.connectors.http import HttpConnector
 from nightjar.connectors.lab import LabConnector
+from nightjar.connectors.vercel import VercelConnector
 from nightjar.connectors.webhook import WebhookConnector
 from nightjar.core.actions import validate_action
+from nightjar.core.enums import ActionType
 from nightjar.core.models import ActionSpec
 from nightjar.core.secrets import EnvVault
 
@@ -68,6 +70,14 @@ class ConnectorRegistry:
             )
         return candidates[0]
 
+    def providers_for(self, action_type: ActionType) -> list[str]:
+        """Every connector that can perform this action, sorted by name."""
+        return sorted(
+            connector.name
+            for connector in self._connectors
+            if action_type in connector.action_types
+        )
+
     async def execute(self, action: ActionSpec) -> dict[str, Any]:
         validate_action(action)
         connector = self.connector_for(action)
@@ -100,6 +110,15 @@ def build_registry(settings: Settings) -> ConnectorRegistry:
                 base_url=settings.cloudflare_api_url,
                 account_id=settings.cloudflare_account_id,
                 pages_project=settings.cloudflare_pages_project,
+            )
+        )
+    if settings.vercel_token:
+        real.append(
+            VercelConnector(
+                settings.vercel_token,
+                base_url=settings.vercel_api_url,
+                team_id=settings.vercel_team_id,
+                project=settings.vercel_project,
             )
         )
     if settings.google_service_account_file:
