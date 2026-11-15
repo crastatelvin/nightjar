@@ -45,6 +45,22 @@ ACTION_TARGET: dict[ActionType, TargetSpec] = {
     ActionType.PROBE: TargetSpec("http", None),
 }
 
+# The same action names a different destination at different providers. Render
+# calls it a service, Fly calls it an app, Cloudflare Pages and Vercel call it a
+# project. The allowlist must use the provider's own vocabulary or an operator
+# cannot tell what a rule protects.
+_TARGET_OVERRIDES: dict[tuple[str, ActionType], TargetSpec] = {
+    ("render", ActionType.ROLLBACK_DEPLOYMENT): TargetSpec(
+        "render", "services", ("service_id", "service")
+    ),
+    ("render", ActionType.RESTART_SERVICE): TargetSpec(
+        "render", "services", ("service_id", "service")
+    ),
+    ("fly", ActionType.RESTART_SERVICE): TargetSpec(
+        "fly", "apps", ("app_id", "app", "service_id", "service")
+    ),
+}
+
 # Repository and mailbox identifiers are case-insensitive at every provider.
 _CASE_INSENSITIVE = frozenset({"repos", "mailboxes"})
 
@@ -96,6 +112,7 @@ def resolve_target(action: ActionSpec) -> ResolvedTarget | None:
     if spec is None:
         return None
     provider = str(action.params.get("connector") or spec.provider)
+    spec = _TARGET_OVERRIDES.get((provider, action.action_type), spec)
     if spec.kind is None:
         return ResolvedTarget(provider=provider, kind=None, value=None)
     value = ""

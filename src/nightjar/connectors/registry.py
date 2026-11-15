@@ -9,6 +9,7 @@ from nightjar.connectors.github import GitHubConnector
 from nightjar.connectors.google_workspace import GoogleWorkspaceConnector
 from nightjar.connectors.http import HttpConnector
 from nightjar.connectors.lab import LabConnector
+from nightjar.connectors.render import RenderConnector
 from nightjar.connectors.vercel import VercelConnector
 from nightjar.connectors.webhook import WebhookConnector
 from nightjar.core.actions import validate_action
@@ -119,6 +120,14 @@ def build_registry(settings: Settings) -> ConnectorRegistry:
                 base_url=settings.vercel_api_url,
                 team_id=settings.vercel_team_id,
                 project=settings.vercel_project,
+            )
+        )
+    if settings.render_api_key:
+        real.append(
+            RenderConnector(
+                settings.render_api_key,
+                base_url=settings.render_api_url,
+                service_id=settings.render_service_id,
             )
         )
     if settings.google_service_account_file:

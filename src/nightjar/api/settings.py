@@ -107,6 +107,9 @@ class Settings(BaseSettings):
     vercel_api_url: str = "https://api.vercel.com"
     vercel_team_id: str | None = None
     vercel_project: str | None = None
+    render_api_key: str | None = None
+    render_api_url: str = "https://api.render.com/v1"
+    render_service_id: str | None = None
     google_service_account_file: str | None = None
     google_api_url: str = "https://gmail.googleapis.com"
     google_oauth_url: str = "https://oauth2.googleapis.com/token"

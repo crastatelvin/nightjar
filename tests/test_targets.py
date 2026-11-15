@@ -186,3 +186,42 @@ def test_a_mail_action_with_a_mailbox_is_managed() -> None:
     )
     managed = normalize_managed_targets({"google": {"mailboxes": ["owner@example.com"]}})
     assert target_allowed(resolve_target(action), managed) is True
+
+
+def test_render_uses_service_vocabulary_not_project() -> None:
+    action = ActionSpec(
+        action_type=ActionType.ROLLBACK_DEPLOYMENT,
+        target="dep-1",
+        params={"connector": "render", "service": "srv-1", "target_version": "dep-1"},
+        risk=RiskClass.R2,
+    )
+    target = resolve_target(action)
+    assert target is not None
+    assert (target.provider, target.kind, target.value) == ("render", "services", "srv-1")
+
+    managed = normalize_managed_targets({"render": {"services": ["srv-1"]}})
+    assert target_allowed(target, managed) is True
+
+
+def test_fly_restart_uses_app_vocabulary() -> None:
+    action = ActionSpec(
+        action_type=ActionType.RESTART_SERVICE,
+        target="app-1",
+        params={"connector": "fly", "app": "app-1"},
+        risk=RiskClass.R2,
+    )
+    target = resolve_target(action)
+    assert target is not None
+    assert (target.provider, target.kind, target.value) == ("fly", "apps", "app-1")
+
+
+def test_cloudflare_and_vercel_rollback_still_use_projects() -> None:
+    action = ActionSpec(
+        action_type=ActionType.ROLLBACK_DEPLOYMENT,
+        target="dpl-1",
+        params={"connector": "vercel", "project": "prj-1", "target_version": "dpl-1"},
+        risk=RiskClass.R2,
+    )
+    target = resolve_target(action)
+    assert target is not None
+    assert (target.provider, target.kind, target.value) == ("vercel", "projects", "prj-1")

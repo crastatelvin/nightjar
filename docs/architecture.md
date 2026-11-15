@@ -79,8 +79,13 @@ verified by re-reading the zone's security level, and a Pages rollback is
 verified against the production deployment list after refusing any target whose
 `latest_stage.status` is not `success`. A Vercel rollback refuses a target that
 is not `READY` and is verified by deployment state plus the production alias. A
-cache purge has no reliable read-back in the Cloudflare API, so it is verified
-by an HTTP predicate on the purged URL.
+Render rollback pauses autodeploy and requires both the target deploy to be live
+and autodeploy to still be off. A cache purge has no reliable read-back in the
+Cloudflare API, so it is verified by an HTTP predicate on the purged URL.
+
+Managed-target vocabulary follows the provider: Cloudflare Pages and Vercel use
+`projects`, Render uses `services`, Fly uses `apps`. An operator's allowlist
+therefore reads the same way as the provider's console.
 
 The planner names an action, not a vendor. `IncidentService` binds the one
 configured connector that implements an action before policy runs, so the

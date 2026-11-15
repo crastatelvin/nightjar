@@ -51,8 +51,9 @@ recorded incidents, one per class, with chain verification green.
 | `revoke_credential` (GitHub) | **Real HTTP**, proven by a 401 probe | `connectors/github.py` |
 | `quarantine_message`, `block_sender` (Google) | **Real HTTP** | `connectors/google_workspace.py` |
 | `quarantine_message`, `block_sender` (Microsoft) | **Lab only** | `connectors/lab.py` |
-| `rollback_deployment` (Cloudflare Pages, Vercel) | **Real HTTP**, read back from production | `connectors/cloudflare.py`, `connectors/vercel.py` |
-| `rollback_deployment` (Render), `restart_service` | **Lab only** | `connectors/lab.py` |
+| `rollback_deployment` (Cloudflare Pages, Vercel, Render) | **Real HTTP**, read back from production | `connectors/cloudflare.py`, `connectors/vercel.py`, `connectors/render.py` |
+| `restart_service` (Render) | **Real HTTP**, verified live and not suspended | `connectors/render.py` |
+| `restart_service` (Fly) | **Lab only** | `connectors/lab.py` |
 | Credential-liveness verification | Real | `CredentialCheck`, `tests/test_github_revocation.py` |
 | Capability discovery | Real | `nightjarctl doctor`, `GET /v1/meta/capabilities` |
 | Fail-closed production defaults | Real | `Settings._refuse_unsafe_production` |
@@ -1035,7 +1036,7 @@ Workspace; Microsoft 365 (6.10) and the deploy connectors are open.
 | 6.11 | Stripe assisted revocation (`MANUAL_STEP` + probe) | `connectors/stripe.py`, `core/actions.py`, UI | manual step visible; 401 passes; 403 fails | 8 |
 | 6.12 ✅ | Cloudflare Pages rollback + read-back checks | `connectors/cloudflare.py`, tests | production deployment id verified | 8 |
 | 6.13 ✅ | Vercel rollback + alias verification | `connectors/vercel.py`, tests | `READY`, alias present | 8 |
-| 6.14 | Render rollback/restart + autodeploy pause | `connectors/render.py`, tests | autodeploy off, deploy live | 8 |
+| 6.14 ✅ | Render rollback/restart + autodeploy pause | `connectors/render.py`, tests | autodeploy off, deploy live | 8 |
 | 6.15 | Fly machine restart + wait | `connectors/fly.py`, tests | `started`, `updated_at` after request | 6 |
 | 6.16 ◐ | Webhook signing (outbound + inbound) | `connectors/webhook.py`, `api/routers/intake.py`, tests | bad signature 401; replay rejected | 6 |
 | 6.17 ✅ | Managed target allowlist in policy + Rego parity | `core/policy.py`, `policies/nightjar.rego`, tests | unmanaged target denied in both engines | 8 |
