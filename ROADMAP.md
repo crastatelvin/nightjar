@@ -139,9 +139,11 @@ step that is still verified.
    session revocation are open.
 5. **Deploy and runtime.** ✅ Cloudflare Pages, Vercel, and Render rollback, each
    validated against a successful production deployment and read back from the
-   provider (Vercel also checks the production alias). ✅ Render restart. Render
-   rollback pauses autodeploy and requires it to still be off at verification,
-   because the next push would otherwise undo the fix. Fly restart is open.
+   provider (Vercel also checks the production alias). ✅ Render and Fly restart.
+   Render rollback pauses autodeploy and requires it to still be off at
+   verification, because the next push would otherwise undo the fix. Fly restart
+   requires the machine to be `started` with an `updated_at` newer than the
+   request.
 6. **Capability probe.** ✅ `nightjarctl doctor` and `GET /v1/meta/capabilities`
    so an operator sees which providers are live and which scopes are missing
    before an incident.

@@ -53,7 +53,7 @@ recorded incidents, one per class, with chain verification green.
 | `quarantine_message`, `block_sender` (Microsoft) | **Lab only** | `connectors/lab.py` |
 | `rollback_deployment` (Cloudflare Pages, Vercel, Render) | **Real HTTP**, read back from production | `connectors/cloudflare.py`, `connectors/vercel.py`, `connectors/render.py` |
 | `restart_service` (Render) | **Real HTTP**, verified live and not suspended | `connectors/render.py` |
-| `restart_service` (Fly) | **Lab only** | `connectors/lab.py` |
+| `restart_service` (Fly) | **Real HTTP**, verified by state and `updated_at` | `connectors/fly.py` |
 | Credential-liveness verification | Real | `CredentialCheck`, `tests/test_github_revocation.py` |
 | Capability discovery | Real | `nightjarctl doctor`, `GET /v1/meta/capabilities` |
 | Fail-closed production defaults | Real | `Settings._refuse_unsafe_production` |
@@ -598,11 +598,16 @@ POST https://api.machines.dev/v1/apps/{app_name}/machines/{machine_id}/restart
 ```
 
 **Verification.** `GET /v1/apps/{app}/machines/{id}` → `state == "started"` and
-`updated_at` after the request timestamp, plus an `http` health predicate. Use
-`GET /v1/apps/{app}/machines/{id}/wait?state=started` to avoid polling.
+`updated_at` at or after the request timestamp. A restart request returns before
+the machine is back, and a machine can report `started` with the old timestamp
+because the request never reached the allocator, so both facts are required. The
+connector records `requested_at` in its result and the plan references it as
+`$result.requested_at`, which the service resolves into the predicate. Add an
+`http` health predicate for the user-visible proof.
 
 **Failure modes.** `400` invalid signal or timeout; `404` machine destroyed;
-`429` 1 req/s per action.
+`429` 1 req/s per action. The machine is read before the restart so a destroyed
+machine fails without a request.
 
 **Config.** `NIGHTJAR_FLY_API_TOKEN`, `NIGHTJAR_FLY_APP`.
 
@@ -1037,7 +1042,7 @@ Workspace; Microsoft 365 (6.10) and the deploy connectors are open.
 | 6.12 ✅ | Cloudflare Pages rollback + read-back checks | `connectors/cloudflare.py`, tests | production deployment id verified | 8 |
 | 6.13 ✅ | Vercel rollback + alias verification | `connectors/vercel.py`, tests | `READY`, alias present | 8 |
 | 6.14 ✅ | Render rollback/restart + autodeploy pause | `connectors/render.py`, tests | autodeploy off, deploy live | 8 |
-| 6.15 | Fly machine restart + wait | `connectors/fly.py`, tests | `started`, `updated_at` after request | 6 |
+| 6.15 ✅ | Fly machine restart + wait | `connectors/fly.py`, tests | `started`, `updated_at` after request | 6 |
 | 6.16 ◐ | Webhook signing (outbound + inbound) | `connectors/webhook.py`, `api/routers/intake.py`, tests | bad signature 401; replay rejected | 6 |
 | 6.17 ✅ | Managed target allowlist in policy + Rego parity | `core/policy.py`, `policies/nightjar.rego`, tests | unmanaged target denied in both engines | 8 |
 | 6.18 ✅ | Availability-aware planner + `ActionUnavailable` | `agents/prompts.py`, `core/actions.py`, tests | unavailable action rejected pre-policy | 6 |

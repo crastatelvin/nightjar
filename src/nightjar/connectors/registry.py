@@ -5,6 +5,7 @@ from typing import Any
 from nightjar.api.settings import Settings
 from nightjar.connectors.base import CheckFn, Connector, ConnectorError, ToolResult
 from nightjar.connectors.cloudflare import CloudflareConnector
+from nightjar.connectors.fly import FlyConnector
 from nightjar.connectors.github import GitHubConnector
 from nightjar.connectors.google_workspace import GoogleWorkspaceConnector
 from nightjar.connectors.http import HttpConnector
@@ -128,6 +129,14 @@ def build_registry(settings: Settings) -> ConnectorRegistry:
                 settings.render_api_key,
                 base_url=settings.render_api_url,
                 service_id=settings.render_service_id,
+            )
+        )
+    if settings.fly_api_token:
+        real.append(
+            FlyConnector(
+                settings.fly_api_token,
+                base_url=settings.fly_api_url,
+                app=settings.fly_app,
             )
         )
     if settings.google_service_account_file:

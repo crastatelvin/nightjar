@@ -286,10 +286,11 @@ Real and exercised end to end:
 - read-only probes (`http.get`) with SSRF guarding, and verification predicates
   (HTTP status, JSON path, DNS, TLS) against any URL you configure;
 - Cloudflare cache purge, under-attack, and Pages rollback, Vercel rollback,
-  Render rollback and restart, GitHub issue creation, and webhook notify as
-  typed, non-simulated operations. Under-attack, Pages production, Vercel
-  deployment state and alias, and Render deploy/autodeploy state are read back
-  from the provider before the incident resolves;
+  Render rollback and restart, Fly machine restart, GitHub issue creation, and
+  webhook notify as typed, non-simulated operations. Under-attack, Pages
+  production, Vercel deployment state and alias, Render deploy/autodeploy state,
+  and Fly machine state and update time are read back from the provider before
+  the incident resolves;
 - GitHub credential revocation, verified by presenting the token and requiring a `401`:
   a `202` from GitHub only means the request was queued, so it is never treated as proof;
 - Gmail quarantine and sender blocking through a delegated service account: the
@@ -308,9 +309,8 @@ Real and exercised end to end:
 
 Not yet real:
 
-- Microsoft 365 mail containment and Fly restart have **no production connector**;
-  they run against the lab only, so those incidents cannot be remediated end to
-  end yet.
+- Microsoft 365 mail containment has **no production connector**; it runs
+  against the lab only, so those incidents cannot be remediated end to end yet.
   [docs/plan/real-world-readiness.md](docs/plan/real-world-readiness.md) is the work
   order that closes this, including the one case that cannot be automated: Stripe has
   no public API to expire a secret key, so Nightjar proves the key is dead after a

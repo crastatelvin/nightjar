@@ -71,8 +71,8 @@ domain code, prompt schema, or test.
 Connectors translate typed actions and probes into provider calls. The
 registry refuses ambiguous mappings, duplicate tool names, unknown read tools,
 and oversized parameters. `http` is read-only; `lab` is the synthetic
-environment; `github`, `cloudflare`, and `google` are real adapters; `webhook`
-sends signed notifications.
+environment; `github`, `cloudflare`, `google`, `vercel`, `render`, and `fly` are
+real adapters; `webhook` sends signed notifications.
 
 Deploy actions are read back rather than trusted. Cloudflare under-attack is
 verified by re-reading the zone's security level, and a Pages rollback is
@@ -80,8 +80,11 @@ verified against the production deployment list after refusing any target whose
 `latest_stage.status` is not `success`. A Vercel rollback refuses a target that
 is not `READY` and is verified by deployment state plus the production alias. A
 Render rollback pauses autodeploy and requires both the target deploy to be live
-and autodeploy to still be off. A cache purge has no reliable read-back in the
-Cloudflare API, so it is verified by an HTTP predicate on the purged URL.
+and autodeploy to still be off. A Fly restart requires the machine to be
+`started` with an `updated_at` at or after the request, because the restart
+response arrives before the machine is back and a stale timestamp means the
+request never reached the allocator. A cache purge has no reliable read-back in
+the Cloudflare API, so it is verified by an HTTP predicate on the purged URL.
 
 Managed-target vocabulary follows the provider: Cloudflare Pages and Vercel use
 `projects`, Render uses `services`, Fly uses `apps`. An operator's allowlist
