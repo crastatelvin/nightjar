@@ -717,14 +717,16 @@ Defaults per provider: Cloudflare 6×5 s, Vercel 12×10 s, Render 20×15 s, Fly
 
 Enforced by `validate_plan()` and the planner prompt:
 
-| Class | Required predicates |
+| Class | Required proof |
 |---|---|
-| `site_outage` | `http` 200 on the primary URL, `tls` ≥ 14 days, stability |
-| `exposed_credential` | `credential` revoked, `http` provider reachable, stability |
-| `phishing_report` | message quarantined, sender filter/rule present, stability |
+| `site_outage` | a user-visible `http` check and a functional `json`/connector check |
+| `exposed_credential` | a required predicate carrying `credential_ref` or `credential_id` |
+| `phishing_report` | two required connector checks: message containment and sender filtering |
 
-A plan missing a required predicate for its class is rejected before policy. This
-is the mechanism that stops "investigate beautifully, then do nothing".
+A plan missing required proof for its class is rejected before policy. Only
+predicates marked `required` count, so an optional check cannot unlock
+resolution. Stability is enforced by the verifier's stability window, not by a
+predicate the planner can weaken.
 
 ---
 
@@ -1052,7 +1054,7 @@ Workspace; Microsoft 365 (6.10) and the deploy connectors are open.
 | 6.16 ◐ | Webhook signing (outbound + inbound) | `connectors/webhook.py`, `api/routers/intake.py`, tests | bad signature 401; replay rejected | 6 |
 | 6.17 ✅ | Managed target allowlist in policy + Rego parity | `core/policy.py`, `policies/nightjar.rego`, tests | unmanaged target denied in both engines | 8 |
 | 6.18 ✅ | Availability-aware planner + `ActionUnavailable` | `agents/prompts.py`, `core/actions.py`, tests | unavailable action rejected pre-policy | 6 |
-| 6.19 | Required-predicate enforcement per class | `core/actions.py`, `agents/prompts.py`, tests | missing predicate → plan rejected | 4 |
+| 6.19 ✅ | Required-predicate enforcement per class | `core/actions.py`, `agents/prompts.py`, tests | missing predicate → plan rejected | 4 |
 | 6.20 ✅ | Manual-step API + case-file panel | `api/routers/incidents.py`, `apps/web/components/case/manual-step-panel.tsx` | manual action blocks resolution until attested | 10 |
 
 **Phase 6 total: ~161 h.**
@@ -1156,7 +1158,7 @@ Nightjar 0.1 ships only when every line is checked and linked to evidence.
 - [ ] Three recorded incidents (outage, credential, phishing) with green chains
 - [ ] `nightjar-eval --suite all` 46/46 on mock **and** a recorded hosted baseline
 - [ ] `unavailable_action_rate == 0`
-- [ ] `credential_exposure` cannot resolve without a `credential` predicate
+- [ ] `credential_exposure` cannot resolve without a credential-bearing predicate
 - [ ] Production settings validator rejects unsafe configuration
 - [ ] Two API replicas run without double execution
 - [ ] OIDC enforced; shared token only with explicit opt-in

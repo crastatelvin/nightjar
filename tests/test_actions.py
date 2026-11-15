@@ -10,7 +10,7 @@ from nightjar.core.actions import (
     validate_action,
     validate_plan,
 )
-from nightjar.core.enums import ActionType, PredicateKind, RiskClass
+from nightjar.core.enums import ActionType, IncidentClass, PredicateKind, RiskClass
 from nightjar.core.models import ActionPlan, ActionSpec, VerificationPredicate
 
 
@@ -115,3 +115,117 @@ def test_action_spec_forbids_unknown_fields() -> None:
             risk=RiskClass.R1,
             shell="rm -rf /",  # type: ignore[call-arg]
         )
+
+
+def _json(url: str) -> VerificationPredicate:
+    return VerificationPredicate(
+        kind=PredicateKind.JSON,
+        description="checkout completes",
+        params={"url": url, "path": "status", "equals": "ok"},
+    )
+
+
+def _connector(name: str, **params: object) -> VerificationPredicate:
+    return VerificationPredicate(
+        kind=PredicateKind.CONNECTOR_CHECK,
+        description=name,
+        params={"check": name, **params},
+    )
+
+
+def _revoke(predicate_ids: list[str]) -> ActionSpec:
+    return ActionSpec(
+        action_type=ActionType.REVOKE_CREDENTIAL,
+        target="cred-1",
+        params={"credential_id": "cred-1"},
+        risk=RiskClass.R2,
+        predicate_ids=predicate_ids,
+    )
+
+
+def test_site_outage_requires_user_visible_and_functional_proof() -> None:
+    http = predicate()
+    plan = ActionPlan(
+        summary="purge",
+        root_cause="cache",
+        actions=[purge(http.id)],
+        predicates=[http],
+    )
+    with pytest.raises(ActionValidationError, match="functional checkout check"):
+        validate_plan(plan, incident_class=IncidentClass.SITE_OUTAGE)
+
+    checkout = _json("https://example.com/checkout")
+    complete = ActionPlan(
+        summary="purge",
+        root_cause="cache",
+        actions=[purge(http.id)],
+        predicates=[http, checkout],
+    )
+    complete.actions[0].predicate_ids.append(checkout.id)
+    validate_plan(complete, incident_class=IncidentClass.SITE_OUTAGE)
+
+
+def test_optional_predicates_do_not_satisfy_a_requirement() -> None:
+    http = predicate()
+    optional = _json("https://example.com/checkout").model_copy(update={"required": False})
+    plan = ActionPlan(
+        summary="purge",
+        root_cause="cache",
+        actions=[purge(http.id)],
+        predicates=[http, optional],
+    )
+    with pytest.raises(ActionValidationError, match="functional checkout check"):
+        validate_plan(plan, incident_class=IncidentClass.SITE_OUTAGE)
+
+
+def test_credential_exposure_requires_a_predicate_about_the_credential() -> None:
+    http = predicate()
+    plan = ActionPlan(
+        summary="revoke",
+        root_cause="leak",
+        actions=[_revoke([http.id])],
+        predicates=[http],
+    )
+    with pytest.raises(ActionValidationError, match="presents the exposed credential"):
+        validate_plan(plan, incident_class=IncidentClass.CREDENTIAL_EXPOSURE)
+
+    check = _connector("github.credential_revoked", credential_ref="env:EXPOSED_PAT")
+    plan.predicates.append(check)
+    plan.actions[0].predicate_ids.append(check.id)
+    validate_plan(plan, incident_class=IncidentClass.CREDENTIAL_EXPOSURE)
+
+
+def test_phishing_requires_both_containment_and_sender_checks() -> None:
+    quarantine = _connector("message_quarantined", message_id="m-1")
+    plan = ActionPlan(
+        summary="contain",
+        root_cause="phish",
+        actions=[
+            ActionSpec(
+                action_type=ActionType.QUARANTINE_MESSAGE,
+                target="m-1",
+                params={"message_id": "m-1"},
+                risk=RiskClass.R1,
+                predicate_ids=[quarantine.id],
+            )
+        ],
+        predicates=[quarantine],
+    )
+    with pytest.raises(ActionValidationError, match="sender-filter"):
+        validate_plan(plan, incident_class=IncidentClass.PHISHING)
+
+    sender = _connector("sender_blocked", sender="bad@example.com")
+    plan.predicates.append(sender)
+    plan.actions[0].predicate_ids.append(sender.id)
+    validate_plan(plan, incident_class=IncidentClass.PHISHING)
+
+
+def test_unknown_classes_keep_only_structural_validation() -> None:
+    check = predicate()
+    plan = ActionPlan(
+        summary="purge",
+        root_cause="cache",
+        actions=[purge(check.id)],
+        predicates=[check],
+    )
+    validate_plan(plan, incident_class=IncidentClass.UNKNOWN)

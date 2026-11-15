@@ -558,7 +558,7 @@ class IncidentService:
             )
             return None
         try:
-            validate_plan(plan)
+            validate_plan(plan, incident_class=incident.incident_class)
         except ActionValidationError as exc:
             await self._fail(incident.id, f"planner produced an invalid plan: {exc}")
             return None

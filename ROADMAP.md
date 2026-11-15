@@ -154,6 +154,10 @@ step that is still verified.
 7. **Managed targets.** ✅ A policy-enforced allowlist of zones, repos, mailboxes,
    projects, and apps, identical in the local and Rego engines. The model may name
    a target; it may not invent one.
+8. **Required proof.** ✅ A plan for each class must carry the proof that class
+   needs: user-visible and functional checks for an outage, a credential-bearing
+   predicate for an exposure, and both containment checks for phishing. Only
+   required predicates count, so a plan cannot weaken its way to resolution.
 
 ### Phase 7 — Multi-process and identity
 

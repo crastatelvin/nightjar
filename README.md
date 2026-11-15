@@ -310,6 +310,10 @@ Real and exercised end to end:
 - an availability-aware planner: the prompt lists only the actions this deployment
   implements, and a plan naming anything else fails before an operator is asked to
   approve it;
+- class-specific proof enforcement: an outage plan needs a user-visible check and a
+  functional check, a credential plan needs a predicate that presents the
+  credential, and a phishing plan needs both containment checks; optional
+  predicates never count;
 - the API, SSE stream, UI, standalone image, and CI.
 
 Not yet real:

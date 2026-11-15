@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from nightjar.core.enums import ActionType, RiskClass
+from nightjar.core.enums import ActionType, IncidentClass, PredicateKind, RiskClass
 from nightjar.core.models import ActionPlan, ActionSpec, VerificationPredicate
 
 # The v1 action catalogue. Anything not listed here is rejected before policy.
@@ -69,7 +69,39 @@ def validate_action(action: ActionSpec) -> None:
         )
 
 
-def validate_plan(plan: ActionPlan) -> None:
+def required_proof_gaps(plan: ActionPlan, incident_class: IncidentClass) -> list[str]:
+    """Name the proof a plan for this class must contain.
+
+    A generic predicate can pass while the customer-visible problem remains, so
+    the class decides what counts as proof. Only predicates marked ``required``
+    can gate resolution, so optional predicates never satisfy a requirement.
+    """
+    required = [predicate for predicate in plan.predicates if predicate.required]
+    gaps: list[str] = []
+    if incident_class is IncidentClass.SITE_OUTAGE:
+        if not any(predicate.kind is PredicateKind.HTTP for predicate in required):
+            gaps.append("a user-visible HTTP check")
+        if not any(
+            predicate.kind in {PredicateKind.JSON, PredicateKind.CONNECTOR_CHECK}
+            for predicate in required
+        ):
+            gaps.append("a functional checkout check")
+    elif incident_class is IncidentClass.CREDENTIAL_EXPOSURE:
+        if not any(
+            "credential_ref" in predicate.params or "credential_id" in predicate.params
+            for predicate in required
+        ):
+            gaps.append("a predicate that presents the exposed credential")
+    elif incident_class is IncidentClass.PHISHING:
+        checks = [
+            predicate for predicate in required if predicate.kind is PredicateKind.CONNECTOR_CHECK
+        ]
+        if len(checks) < 2:
+            gaps.append("separate message-containment and sender-filter checks")
+    return gaps
+
+
+def validate_plan(plan: ActionPlan, *, incident_class: IncidentClass | None = None) -> None:
     if not plan.actions:
         raise ActionValidationError("plan has no actions")
     predicate_ids = {predicate.id for predicate in plan.predicates}
@@ -80,6 +112,12 @@ def validate_plan(plan: ActionPlan) -> None:
         missing = set(action.predicate_ids) - predicate_ids
         if missing:
             raise ActionValidationError(f"action references unknown predicates: {sorted(missing)}")
+    if incident_class is not None:
+        gaps = required_proof_gaps(plan, incident_class)
+        if gaps:
+            raise ActionValidationError(
+                f"plan is missing required proof for {incident_class.value}: {'; '.join(gaps)}"
+            )
 
 
 def predicates_by_id(plan: ActionPlan) -> dict[str, VerificationPredicate]:

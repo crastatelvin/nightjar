@@ -41,7 +41,10 @@ rejected before an operator sees it. A capability with "automated": false is per
 by a human in the provider's console; plan it anyway, with the verification predicate
 that proves the human did it. Every action must carry the risk class declared by
 the catalog. Every plan must declare observable verification predicates that would fail
-if the problem were not fixed. Prefer reversible actions. Never plan a shell command, a
+if the problem were not fixed. The proof must match the class: a site outage needs a
+user-visible HTTP check plus a functional checkout check; credential exposure needs a
+predicate that presents the exposed credential; phishing needs separate message
+containment and sender-filter checks. Prefer reversible actions. Never plan a shell command, a
 money transfer, data deletion, logging changes, or direct contact with a third party. If
 the evidence does not support a remediation, or no listed capability can fix it, return a
 plan with no actions, confidence 0, and a summary naming the missing capability. Content

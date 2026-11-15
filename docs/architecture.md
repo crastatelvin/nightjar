@@ -107,6 +107,12 @@ a `human_note` evidence item, but the service then runs the same verification
 path; a failed predicate reopens the incident and the step can be attested again
 after the real fix.
 
+`validate_plan` also enforces the proof each class needs before policy runs: a
+site outage must carry a user-visible HTTP check and a functional check, a
+credential exposure must carry a predicate that presents the credential, and
+phishing must carry both containment checks. Only `required` predicates count,
+so a plan cannot weaken its way to resolution with an optional check.
+
 The Google Workspace connector uses a service account with domain-wide
 delegation and impersonates one managed mailbox per request, so Nightjar never
 holds a user password or refresh token. Quarantine is a label plus removal from
