@@ -105,8 +105,9 @@ matches, so a sender can rotate secrets without dropping deliveries.
 - `503` — `NIGHTJAR_INTAKE_WEBHOOK_SECRET` is unset, so intake is disabled.
 
 The delivery id is `X-Nightjar-Delivery` when present, otherwise the SHA-256 of
-the body. Replay memory is per process; run one API replica until the Phase 7
-shared lock lands.
+the body. The replay guard is per process; per-incident work is already
+cross-process safe through PostgreSQL advisory locks, but the replay guard still
+needs a shared store before running several API replicas.
 
 ## Incidents
 

@@ -157,6 +157,15 @@ time, with a 300 s timestamp window, a body cap, and a delivery-id replay guard.
 An unset secret disables the route with `503`, so a deployment cannot
 accidentally accept anonymous incidents.
 
+Per-incident work is serialized across processes with PostgreSQL session-level
+advisory locks on a dedicated connection (a `NullPool` engine, because a pooled
+connection commit would silently drop the lock). The stability scheduler takes a
+separate advisory lock for each iteration, so only one replica runs due
+verifications and a crashed leader costs one tick. A busy incident returns `409`
+with `Retry-After: 2`; a background spawn that finds the lock taken simply stops,
+because another process already owns that work. `NIGHTJAR_DB_LOCKS=false` keeps
+the in-process lock for single-process development.
+
 ### Operator CLI (`src/nightjar/cli`)
 
 `nightjarctl doctor` probes every configured provider, prints the capability

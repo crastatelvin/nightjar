@@ -26,8 +26,9 @@ Use this before exposing a Nightjar deployment to a real organization. Items mar
       falls back to the body hash when the sender omits one.
 - [ ] Keep `NIGHTJAR_INTAKE_WEBHOOK_TOLERANCE_SECONDS` small enough that a captured
       request expires quickly; 300 is the default.
-- [ ] Run one API replica until the shared replay store lands. The guard is per
-      process.
+- [ ] Replicas are safe for incident work and the stability scheduler (advisory
+      locks), but the intake replay guard is per process. If you run several API
+      replicas, terminate intake at one replica or add a shared replay store.
 
 ## Provider credentials
 

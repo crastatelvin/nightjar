@@ -336,8 +336,9 @@ Not yet real:
   latency numbers are mock-only;
 - one shared bearer token and a self-asserted actor; no per-user identity, RBAC, or rate
   limiting;
-- one API process is the only safe topology: the stability scheduler and per-incident
-  locks are in-process, so replicas would double-run checks.
+- the intake replay guard is per process, so a horizontally scaled API needs a shared
+  store for it. Per-incident work and the stability scheduler are already safe across
+  replicas through PostgreSQL advisory locks.
 
 Production is fail-closed at startup: with `NIGHTJAR_ENVIRONMENT=production` the process
 refuses to boot with the lab connector on, private probes allowed, no bearer token or

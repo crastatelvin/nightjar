@@ -59,7 +59,7 @@ recorded incidents, one per class, with chain verification green.
 | Credential-liveness verification | Real | `CredentialCheck`, `tests/test_github_revocation.py` |
 | Capability discovery | Real | `nightjarctl doctor`, `GET /v1/meta/capabilities` |
 | Fail-closed production defaults | Real | `Settings._refuse_unsafe_production` |
-| Multi-process safety | **Missing** | In-process `asyncio.Lock` only |
+| Multi-process safety | **Real for incidents and the scheduler** | `api/locks.py`, `tests/test_locks.py`; the intake replay guard is still per process |
 | Real-model evaluation | **Missing** | All numbers are mock |
 | OIDC / RBAC / rate limits | **Missing** | One shared token, self-asserted actor |
 
@@ -885,22 +885,27 @@ value. No secret is ever logged at `INFO`.
 
 ## 9. Multi-process correctness
 
-### 9.1 Advisory locks instead of `asyncio.Lock`
+### 9.1 ✅ Advisory locks instead of `asyncio.Lock`
 
 `src/nightjar/api/locks.py`:
 
 ```python
 @asynccontextmanager
-async def incident_lock(engine, incident_id: str):
-    async with engine.connect() as conn:
-        key = await conn.scalar(select(func.hashtextextended(incident_id, 0)))
-        got = await conn.scalar(select(func.pg_try_advisory_lock(key)))
-        if not got:
-            raise LockBusy(incident_id)
+async def _try_lock(engine, namespace: int, key: int, *, name: str):
+    async with engine.connect() as connection:
+        acquired = await connection.scalar(
+            text("SELECT pg_try_advisory_lock(:namespace, :key)"),
+            {"namespace": namespace, "key": key},
+        )
+        if not acquired:
+            raise LockBusy(name)
         try:
             yield
         finally:
-            await conn.execute(select(func.pg_advisory_unlock(key)))
+            await connection.execute(
+                text("SELECT pg_advisory_unlock(:namespace, :key)"),
+                {"namespace": namespace, "key": key},
+            )
 ```
 
 Notes that matter:
@@ -917,11 +922,25 @@ Notes that matter:
 - `NIGHTJAR_DB_LOCKS=false` keeps the in-process lock for tests and single-process
   dev.
 
-### 9.2 Scheduler leader election
+**Shipped** in `api/locks.py` and `api/db.py`. The lock engine is a separate
+`NullPool` engine, so a held lock never consumes a request-pool connection while
+the pipeline calls a model or a provider, and the lock connection cannot be
+returned to a pool by a commit. The two-integer form is used
+(`pg_try_advisory_lock(namespace, key)`), which avoids the
+`hashtextextended`/asyncpg bigint typing trap and keeps the scheduler namespace
+disjoint from incident keys. `run_pipeline` raises `LockBusy`; the background
+spawn swallows it because another process already owns the work, while the API
+routes and `retry(wait=true)` surface `409` with `Retry-After: 2`.
+`tests/test_locks.py` covers contention, release, a commit on another connection
+not dropping the lock, the scheduler election, and a locked incident not being
+run twice.
 
-`_scheduler_loop` acquires a constant advisory lock
-(`0x6E6A7363` = "njsc") on a dedicated connection before each iteration. Only the
-leader runs `run_due_verifications()`. On shutdown, release. This makes N replicas
+### 9.2 ✅ Scheduler leader election
+
+`_scheduler_loop` acquires a constant advisory lock on a dedicated connection
+before each iteration. Only the leader runs `run_due_verifications()`, and the
+lock is released immediately so a crashed leader costs one tick. The namespace is
+`0x6E6B` and the key is `1`, disjoint from incident keys. This makes N replicas
 safe without Redis.
 
 ### 9.3 SSE without polling

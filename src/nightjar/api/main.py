@@ -9,10 +9,12 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from sqlalchemy.ext.asyncio import AsyncEngine
 
 from nightjar import __version__
 from nightjar.agents.runtime import build_runtime
 from nightjar.api import db
+from nightjar.api.locks import LockBusy, scheduler_leader
 from nightjar.api.repository import ConflictError, NotFoundError, Repository
 from nightjar.api.routers import approvals, health, incidents, intake, meta
 from nightjar.api.service import IncidentService
@@ -44,6 +46,7 @@ def build_service(settings: Settings) -> IncidentService:
         registry=registry,
         policy=policy,
         verifier=verifier,
+        lock_engine=db.get_lock_engine(),
     )
 
 
@@ -58,7 +61,10 @@ def create_app(
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await service.repo.ensure_tenant(resolved.tenant_id, resolved.tenant_name)
-        scheduler = asyncio.create_task(_scheduler_loop(service), name="nightjar-stability")
+        lock_engine = service.lock_engine if resolved.db_locks else None
+        scheduler = asyncio.create_task(
+            _scheduler_loop(service, lock_engine), name="nightjar-stability"
+        )
         try:
             yield
         finally:
@@ -103,6 +109,14 @@ def create_app(
     async def invalid_action(request: Request, exc: ActionValidationError) -> JSONResponse:
         return JSONResponse(status_code=422, content={"detail": str(exc)})
 
+    @api.exception_handler(LockBusy)
+    async def lock_busy(request: Request, exc: LockBusy) -> JSONResponse:
+        return JSONResponse(
+            status_code=409,
+            content={"detail": str(exc)},
+            headers={"retry-after": "2"},
+        )
+
     api.include_router(health.router)
     api.include_router(incidents.router)
     api.include_router(approvals.router)
@@ -111,10 +125,15 @@ def create_app(
     return api
 
 
-async def _scheduler_loop(service: IncidentService) -> None:
+async def _scheduler_loop(service: IncidentService, lock_engine: AsyncEngine | None) -> None:
     while True:
         try:
-            await service.run_due_verifications()
+            if lock_engine is None:
+                await service.run_due_verifications()
+            else:
+                async with scheduler_leader(lock_engine) as leader:
+                    if leader:
+                        await service.run_due_verifications()
         except Exception:
             log.exception("stability scheduler iteration failed")
         await asyncio.sleep(2.0)

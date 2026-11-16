@@ -23,6 +23,9 @@ class Settings(BaseSettings):
 
     database_url: str = "postgresql+asyncpg://nightjar@127.0.0.1:55432/nightjar"
     db_echo: bool = False
+    # Advisory locks make two API replicas safe. Off is for single-process dev
+    # and for tests that build a service without a lock engine.
+    db_locks: bool = True
 
     api_host: str = "127.0.0.1"
     api_port: int = 8000

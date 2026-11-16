@@ -10,8 +10,12 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import AsyncIterator
+from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from datetime import timedelta
 from typing import Any
+
+from sqlalchemy.ext.asyncio import AsyncEngine
 
 from nightjar.agents.types import (
     AgentRuntime,
@@ -22,6 +26,7 @@ from nightjar.agents.types import (
     ProbeRequest,
     TriageInput,
 )
+from nightjar.api.locks import LockBusy, incident_lock
 from nightjar.api.repository import CaseFile, ConflictError, NotFoundError, Repository
 from nightjar.api.settings import Settings
 from nightjar.connectors.base import ConnectorError, ToolResult
@@ -99,6 +104,7 @@ class IncidentService:
         registry: ConnectorRegistry,
         policy: PolicyEngine | None = None,
         verifier: Verifier | None = None,
+        lock_engine: AsyncEngine | None = None,
     ) -> None:
         self.settings = settings
         self.repo = repository
@@ -115,6 +121,7 @@ class IncidentService:
             allow_private=settings.allow_private_probes,
         )
         self._locks: dict[str, asyncio.Lock] = {}
+        self._lock_engine = lock_engine
         self._tasks: set[asyncio.Task[None]] = set()
         self._closed = False
         self._managed_targets = normalize_managed_targets(settings.managed_targets)
@@ -206,7 +213,7 @@ class IncidentService:
                 )
             )
         else:
-            self.spawn(self.run_pipeline(incident_id))
+            self.spawn(self._run_pipeline_background(incident_id))
 
     async def _start_pipeline(self, incident_id: str) -> None:
         if self.settings.orchestrator == "temporal":
@@ -235,43 +242,66 @@ class IncidentService:
             await asyncio.gather(*self._tasks, return_exceptions=True)
 
     # --------------------------------------------------------------- lifecycle
-    def _lock(self, incident_id: str) -> asyncio.Lock:
-        if incident_id not in self._locks:
-            self._locks[incident_id] = asyncio.Lock()
-        return self._locks[incident_id]
+    @property
+    def lock_engine(self) -> AsyncEngine | None:
+        return self._lock_engine
+
+    def _lock(self, incident_id: str) -> AbstractAsyncContextManager[None]:
+        """Cross-process when a lock engine is configured, in-process otherwise."""
+        if self._lock_engine is not None and self.settings.db_locks:
+            return incident_lock(self._lock_engine, incident_id)
+        return self._local_lock(incident_id)
+
+    @asynccontextmanager
+    async def _local_lock(self, incident_id: str) -> AsyncIterator[None]:
+        lock = self._locks.get(incident_id)
+        if lock is None:
+            lock = asyncio.Lock()
+            self._locks[incident_id] = lock
+        async with lock:
+            yield
 
     async def run_pipeline(self, incident_id: str) -> None:
         async with self._lock(incident_id):
-            incident = await self.repo.get_incident(incident_id)
-            if incident.status not in {IncidentStatus.INTAKE, IncidentStatus.REOPENED}:
+            await self._run_pipeline_locked(incident_id)
+
+    async def _run_pipeline_background(self, incident_id: str) -> None:
+        try:
+            await self.run_pipeline(incident_id)
+        except LockBusy:
+            log.info("incident %s is already being handled by another process", incident_id)
+
+    async def _run_pipeline_locked(self, incident_id: str) -> None:
+        incident = await self.repo.get_incident(incident_id)
+        if incident.status not in {IncidentStatus.INTAKE, IncidentStatus.REOPENED}:
+            return
+        try:
+            await self._set_status(incident, IncidentStatus.INVESTIGATING, "pipeline started")
+            bundle = await self._investigate(incident)
+            if (
+                bundle.critique.overall.value == "contradicted"
+                or not bundle.findings
+                or bundle.triage.incident_class is IncidentClass.UNKNOWN
+            ):
+                await self._fail(
+                    incident_id,
+                    "investigation did not produce a supported, classifiable finding",
+                )
                 return
-            try:
-                await self._set_status(incident, IncidentStatus.INVESTIGATING, "pipeline started")
-                bundle = await self._investigate(incident)
-                if (
-                    bundle.critique.overall.value == "contradicted"
-                    or not bundle.findings
-                    or bundle.triage.incident_class is IncidentClass.UNKNOWN
-                ):
-                    await self._fail(
-                        incident_id,
-                        "investigation did not produce a supported, classifiable finding",
-                    )
-                    return
-                plan = await self._plan(incident, bundle)
-                if plan is None:
-                    return
-                incident = await self.repo.get_incident(incident_id)
-                await self._gate_and_execute(incident, plan, bundle)
-            except BudgetExceeded as exc:
-                log.warning("incident %s exceeded its budget: %s", incident_id, exc)
-                await self._fail(incident_id, str(exc))
-            except (ServiceError, ActionValidationError) as exc:
-                log.warning("incident %s failed: %s", incident_id, exc)
-                await self._fail(incident_id, str(exc))
-            except Exception as exc:  # pragma: no cover - last-resort containment
-                log.exception("incident %s crashed", incident_id)
-                await self._fail(incident_id, f"internal error: {type(exc).__name__}")
+            plan = await self._plan(incident, bundle)
+            if plan is None:
+                return
+            incident = await self.repo.get_incident(incident_id)
+            await self._gate_and_execute(incident, plan, bundle)
+        except BudgetExceeded as exc:
+            log.warning("incident %s exceeded its budget: %s", incident_id, exc)
+            await self._fail(incident_id, str(exc))
+        except (ServiceError, ActionValidationError) as exc:
+            log.warning("incident %s failed: %s", incident_id, exc)
+            await self._fail(incident_id, str(exc))
+        except Exception as exc:  # pragma: no cover - last-resort containment
+            log.exception("incident %s crashed", incident_id)
+            await self._fail(incident_id, f"internal error: {type(exc).__name__}")
 
     async def _set_status(
         self, incident: Incident, status: IncidentStatus, reason: str
@@ -1091,13 +1121,16 @@ class IncidentService:
         due = await self.repo.due_for_verification(utcnow())
         checked = 0
         for incident_id in due:
-            async with self._lock(incident_id):
-                try:
-                    await self._verify(incident_id, phase="stability")
-                    checked += 1
-                except Exception:
-                    log.exception("stability verification failed for %s", incident_id)
-                    await self._fail(incident_id, "stability verification crashed")
+            try:
+                async with self._lock(incident_id):
+                    try:
+                        await self._verify(incident_id, phase="stability")
+                        checked += 1
+                    except Exception:
+                        log.exception("stability verification failed for %s", incident_id)
+                        await self._fail(incident_id, "stability verification crashed")
+            except LockBusy:
+                continue
         return checked
 
     # --------------------------------------------------------------------- misc

@@ -169,8 +169,9 @@ exists. What remains in this phase is hardening, not reach.
 
 ### Phase 7 — Multi-process and identity
 
-- Postgres advisory locks for per-incident work; scheduler leader election. The
-  in-process `asyncio.Lock` is the only safe topology today.
+- Postgres advisory locks for per-incident work; scheduler leader election. ✅
+  Per-incident work and the stability scheduler are safe across replicas; the
+  intake replay guard still needs a shared store.
 - OIDC authentication, role mapping, separation of duties for approvals, rate
   limits, request size caps, and request IDs.
 - SSE over `LISTEN/NOTIFY` with the poll as fallback.

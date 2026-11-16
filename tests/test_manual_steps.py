@@ -380,3 +380,41 @@ def test_the_manual_step_api_lists_the_step_and_attests_it(
     assert body["incident"]["status"] == "resolved"
     assert body["manual_steps"][0]["state"] == "attested"
     assert any(item["kind"] == "human_note" for item in body["evidence"])
+
+
+def test_a_busy_incident_returns_409_with_retry_after(
+    monkeypatch: pytest.MonkeyPatch, database_url: str
+) -> None:
+    """Another replica owning the incident must not be waited on or raced."""
+    import asyncio
+
+    from fastapi.testclient import TestClient
+    from sqlalchemy.ext.asyncio import create_async_engine
+    from sqlalchemy.pool import NullPool
+
+    from nightjar.api.locks import incident_lock
+    from nightjar.api.main import create_app
+
+    service, repo = build_service(monkeypatch, passed=True)
+    engine = create_async_engine(database_url, poolclass=NullPool)
+    service._lock_engine = engine
+    action = repo.actions[0]
+    asyncio.run(service._execute_and_verify(repo.incident.id))
+    app = create_app(Settings(_env_file=None, stability_seconds=0, db_locks=False), service=service)
+
+    async def scenario() -> Any:
+        try:
+            async with incident_lock(engine, repo.incident.id):
+                with TestClient(app) as client:
+                    return client.post(
+                        f"/v1/incidents/{repo.incident.id}/manual-steps/{action.id}/attest",
+                        json={"note": "expired in the Dashboard"},
+                    )
+        finally:
+            await engine.dispose()
+
+    response = asyncio.run(scenario())
+
+    assert response.status_code == 409
+    assert response.headers["retry-after"] == "2"
+    assert "another Nightjar process" in response.json()["detail"]

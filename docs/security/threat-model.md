@@ -139,10 +139,12 @@ timestamps outside the tolerance window, rejects a repeated delivery id, caps th
 body size before parsing, and returns `503` when no secret is configured. A
 tampered body fails the signature even if the timestamp is fresh.
 
-**Residual risk:** the replay guard is per process, so horizontally scaled
-replicas need a shared store (Phase 7). The secret is shared with the sender, so
-compromise of the sender's configuration allows forged incidents; the incident
-still has to pass policy and verification before anything changes.
+**Residual risk:** the replay guard is per process. Advisory locks serialize
+incident work across replicas, but they do not deduplicate an intake delivery, so
+horizontally scaled replicas still need a shared replay store. The secret is
+shared with the sender, so compromise of the sender's configuration allows forged
+incidents; the incident still has to pass policy and verification before anything
+changes.
 
 ## Abuse cases explicitly out of scope
 
