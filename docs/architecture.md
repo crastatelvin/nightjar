@@ -135,8 +135,14 @@ already implements, so a plan cannot name `connector: "lab"` to get a synthetic
 
 FastAPI application with bearer auth, CORS, health/readiness, incident CRUD,
 case file, timeline, SSE stream, chain verification, notes, retry,
-verify-now, approvals, and meta. `IncidentService` is the single orchestrator
-used by both the inline pipeline and Temporal activities.
+verify-now, approvals, manual steps, and meta. `IncidentService` is the single
+orchestrator used by both the inline pipeline and Temporal activities.
+
+Alert intake is the one mutating route that does not take a bearer token. It is
+authenticated by an HMAC-SHA256 over `"<timestamp>.<body>"`, compared in constant
+time, with a 300 s timestamp window, a body cap, and a delivery-id replay guard.
+An unset secret disables the route with `503`, so a deployment cannot
+accidentally accept anonymous incidents.
 
 ### Operator CLI (`src/nightjar/cli`)
 
@@ -218,6 +224,8 @@ start that way.
 8. Policy failures and engine errors deny.
 9. No action can reach a provider, zone, repository, mailbox, project, or app
    that is not in the operator's allowlist.
+10. Inbound intake is disabled without a secret; an accepted delivery is signed,
+    fresh, and seen once.
 
 ## Data model
 

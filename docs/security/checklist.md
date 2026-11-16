@@ -16,6 +16,19 @@ Use this before exposing a Nightjar deployment to a real organization. Items mar
       should inject and strip it if actor identity matters.
 - [ ] Turn on provider-side audit logging for every token Nightjar holds.
 
+## Alert intake
+
+- [ ] Leave `NIGHTJAR_INTAKE_WEBHOOK_SECRET` empty unless an alert source needs
+      to file incidents; the endpoint returns `503` when it is unset.
+- [ ] Use at least 32 random characters (production refuses a shorter secret) and
+      share it only with the sender.
+- [ ] Give each sender its own delivery id. Nightjar rejects a repeated id, and
+      falls back to the body hash when the sender omits one.
+- [ ] Keep `NIGHTJAR_INTAKE_WEBHOOK_TOLERANCE_SECONDS` small enough that a captured
+      request expires quickly; 300 is the default.
+- [ ] Run one API replica until the shared replay store lands. The guard is per
+      process.
+
 ## Provider credentials
 
 - [ ] **Required** Use scoped tokens, never personal admin tokens.

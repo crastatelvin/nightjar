@@ -47,6 +47,7 @@ recorded incidents, one per class, with chain verification green.
 | `purge_cache`, `enable_under_attack` | Real HTTP; under-attack is read back | `connectors/cloudflare.py` |
 | `open_issue` | Real HTTP | `connectors/github.py` |
 | `notify` | Real HTTP, HMAC-signed when configured | `connectors/webhook.py` |
+| Signed alert intake | **Real**, HMAC + timestamp + replay rejection | `api/routers/intake.py`, `core/signatures.py` |
 | `http.get` probe | Real, SSRF-guarded | `connectors/http.py` |
 | `revoke_credential` (GitHub) | **Real HTTP**, proven by a 401 probe | `connectors/github.py` |
 | `quarantine_message`, `block_sender` (Google) | **Real HTTP** | `connectors/google_workspace.py` |
@@ -619,31 +620,40 @@ machine fails without a request.
 
 ### 5.9 Webhook — signed delivery
 
-Current `notify` posts unsigned JSON. Production needs authentication and replay
-protection.
+`notify` signs each delivery when `NIGHTJAR_NOTIFY_WEBHOOK_SECRET` is set, and
+inbound intake verifies the same construction.
 
 **Outbound.**
 
 ```http
 POST <configured url>
-X-Nightjar-Timestamp: 1763000000
-X-Nightjar-Delivery: 01a1d3…
-X-Nightjar-Signature: v1=<hex hmac_sha256(secret, timestamp + "." + body)>
+X-Nightjar-Signature: t=1763000000,v1=<hex hmac_sha256(secret, "1763000000." + body)>
 Content-Type: application/json
 
-{"incident_id": "…", "title": "…", "status": "…", "summary": "…", "case_url": "…"}
+{"event": "nightjar.notify", "channel": "…", "message": "…", "incident_id": "…"}
 ```
 
-Verification: `2xx` within 10 s, response body may echo `delivery_id`. Retries:
-3, backoff 1/5/25 s, same `delivery_id`. Failure is `TransientError`, not a
-resolved incident.
+A non-2xx response is a retryable `ConnectorError`, never a resolved incident.
+The delivery id and the 1/5/25 s retry loop are not implemented yet; they are
+tracked in the connector SDK work.
 
-**Inbound** (alert intake): same scheme, reject skew > 300 s, constant-time
-compare, dedupe on `delivery_id`. This closes the "anyone can file an incident"
-hole.
+**Inbound** (alert intake): the same scheme, at `POST /v1/intake/webhook`.
+`verify_signature` rejects a missing or malformed header, a timestamp more than
+`NIGHTJAR_INTAKE_WEBHOOK_TOLERANCE_SECONDS` away from now (default 300 s), and a
+digest that does not match the exact body; comparison is `hmac.compare_digest`.
+The body is capped before it is parsed, and the endpoint returns `503` when no
+secret is configured rather than accepting anonymous incidents.
 
-**Config.** `NIGHTJAR_WEBHOOK_URL`, `NIGHTJAR_WEBHOOK_SECRET`,
-`NIGHTJAR_WEBHOOK_INBOUND_SECRET`.
+Replay protection uses `X-Nightjar-Delivery`, falling back to the SHA-256 of the
+body when the sender provides none, so replaying a captured request is still
+rejected. The guard is per process; a shared store arrives with the Phase 7 locks.
+The incident's dedupe key defaults to `webhook:<delivery_id>`, so a sender retry
+that slips through a restarted guard returns the same case rather than a second
+one.
+
+**Config.** `NIGHTJAR_NOTIFY_WEBHOOK_URL`, `NIGHTJAR_NOTIFY_WEBHOOK_SECRET`,
+`NIGHTJAR_INTAKE_WEBHOOK_SECRET`, `NIGHTJAR_INTAKE_WEBHOOK_TOLERANCE_SECONDS`,
+`NIGHTJAR_INTAKE_MAX_BODY_BYTES`.
 
 ---
 
@@ -830,7 +840,8 @@ real gate, not a label.
 | `NIGHTJAR_VERCEL_TOKEN`, `_TEAM_ID`, `_PROJECT_ID` | Vercel |
 | `NIGHTJAR_RENDER_API_KEY`, `_SERVICE_ID` | Render |
 | `NIGHTJAR_FLY_API_TOKEN`, `_APP` | Fly |
-| `NIGHTJAR_WEBHOOK_SECRET`, `_INBOUND_SECRET` | signing |
+| `NIGHTJAR_NOTIFY_WEBHOOK_URL`, `_SECRET` | outbound signing |
+| `NIGHTJAR_INTAKE_WEBHOOK_SECRET`, `_TOLERANCE_SECONDS`, `_MAX_BODY_BYTES` | inbound signing |
 | `NIGHTJAR_VAULT_PATH` | file vault |
 | `NIGHTJAR_DB_LOCKS` | advisory locks on/off |
 
@@ -1030,9 +1041,9 @@ Estimates are focused engineering hours, including tests and docs.
 
 ### Phase 6 — Production execution surface (P0)
 
-Status: ✅ shipped in this phase. 6.16 is half shipped — outbound notifications are
-signed, inbound signature verification on intake is not. 6.9 is shipped for Google
-Workspace; Microsoft 365 (6.10) and the deploy connectors are open.
+Status: ✅ shipped in this phase. 6.16 is complete: outbound notifications are
+signed and inbound intake verifies the same scheme, rejects stale timestamps, and
+rejects replays. 6.9 is shipped for Google Workspace; Microsoft 365 (6.10) is open.
 
 | ID | Task | Files | Acceptance | Est |
 |---|---|---|---|---|
@@ -1051,7 +1062,7 @@ Workspace; Microsoft 365 (6.10) and the deploy connectors are open.
 | 6.13 ✅ | Vercel rollback + alias verification | `connectors/vercel.py`, tests | `READY`, alias present | 8 |
 | 6.14 ✅ | Render rollback/restart + autodeploy pause | `connectors/render.py`, tests | autodeploy off, deploy live | 8 |
 | 6.15 ✅ | Fly machine restart + wait | `connectors/fly.py`, tests | `started`, `updated_at` after request | 6 |
-| 6.16 ◐ | Webhook signing (outbound + inbound) | `connectors/webhook.py`, `api/routers/intake.py`, tests | bad signature 401; replay rejected | 6 |
+| 6.16 ✅ | Webhook signing (outbound + inbound) | `connectors/webhook.py`, `api/routers/intake.py`, `core/signatures.py`, tests | bad signature 401; replay rejected | 6 |
 | 6.17 ✅ | Managed target allowlist in policy + Rego parity | `core/policy.py`, `policies/nightjar.rego`, tests | unmanaged target denied in both engines | 8 |
 | 6.18 ✅ | Availability-aware planner + `ActionUnavailable` | `agents/prompts.py`, `core/actions.py`, tests | unavailable action rejected pre-policy | 6 |
 | 6.19 ✅ | Required-predicate enforcement per class | `core/actions.py`, `agents/prompts.py`, tests | missing predicate → plan rejected | 4 |

@@ -69,6 +69,23 @@ class ManualStepAttest(BaseModel):
     note: str = Field(default="", max_length=2000)
 
 
+class WebhookIntake(BaseModel):
+    """The incident an alert source may file over a signed webhook."""
+
+    title: str = Field(min_length=3, max_length=300)
+    description: str = ""
+    incident_class: IncidentClass = IncidentClass.UNKNOWN
+    severity: Severity = Severity.MEDIUM
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    dedupe_key: str | None = Field(default=None, max_length=200)
+
+
+class IntakeAccepted(BaseModel):
+    incident_id: str
+    delivery_id: str
+    deduplicated: bool
+
+
 class ManualStepView(BaseModel):
     action_id: str
     action_type: str
@@ -161,10 +178,12 @@ __all__ = [
     "IncidentCreate",
     "IncidentList",
     "IncidentListItem",
+    "IntakeAccepted",
     "ManualStepAttest",
     "ManualStepView",
     "MetaInfo",
     "NoteCreate",
     "ProviderHealth",
     "TimelineList",
+    "WebhookIntake",
 ]

@@ -122,6 +122,12 @@ class Settings(BaseSettings):
     notify_webhook_url: str | None = None
     notify_webhook_secret: str | None = None
 
+    # Inbound alert intake. Unset disables POST /v1/intake/webhook (503) rather
+    # than leaving an unauthenticated way to file an incident.
+    intake_webhook_secret: str | None = None
+    intake_webhook_tolerance_seconds: int = 300
+    intake_max_body_bytes: int = 65_536
+
     # Targets the agent may touch, keyed by provider. Policy denies anything
     # outside this list, so a prompt-injected plan cannot name its own zone,
     # repository, mailbox, project, or app. Required in production.
@@ -160,6 +166,10 @@ class Settings(BaseSettings):
             problems.append(
                 "NIGHTJAR_MANAGED_TARGETS.google.mailboxes is required when the "
                 "Google Workspace connector is configured"
+            )
+        if self.intake_webhook_secret and len(self.intake_webhook_secret) < 32:
+            problems.append(
+                "NIGHTJAR_INTAKE_WEBHOOK_SECRET must be at least 32 characters in production"
             )
         if problems:
             raise ValueError("unsafe production configuration: " + "; ".join(problems))

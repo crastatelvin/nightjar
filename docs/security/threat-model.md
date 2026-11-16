@@ -119,6 +119,22 @@ Any edit, deletion, or reorder breaks the chain and is reported with `broken_at`
 **Residual risk:** an attacker with database write access can rewrite the entire
 chain. Anchoring the head hash to an external append-only store is future work.
 
+### 7. An unauthenticated alert sender
+
+**Goal:** file fabricated incidents, burn operator attention, or replay a captured
+alert to trigger a second response.
+
+**Controls:** `POST /v1/intake/webhook` requires an HMAC-SHA256 signature over
+`"<timestamp>.<raw body>"` with a shared secret, compares in constant time, rejects
+timestamps outside the tolerance window, rejects a repeated delivery id, caps the
+body size before parsing, and returns `503` when no secret is configured. A
+tampered body fails the signature even if the timestamp is fresh.
+
+**Residual risk:** the replay guard is per process, so horizontally scaled
+replicas need a shared store (Phase 7). The secret is shared with the sender, so
+compromise of the sender's configuration allows forged incidents; the incident
+still has to pass policy and verification before anything changes.
+
 ## Abuse cases explicitly out of scope
 
 - Multi-tenant isolation (single tenant per deployment in v1).
@@ -139,6 +155,8 @@ chain. Anchoring the head hash to an external append-only store is future work.
 5. Evidence and timeline are append-only and hash-chained.
 6. Untrusted content is redacted and labelled before it reaches a model.
 7. Probes cannot reach private address space unless explicitly enabled.
+8. Inbound intake is disabled without a secret, and every accepted delivery is
+   signed, fresh, and seen once.
 
 See [checklist.md](checklist.md) for the deployment checklist and
 [../architecture.md](../architecture.md) for component detail.

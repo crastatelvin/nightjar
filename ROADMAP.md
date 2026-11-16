@@ -120,10 +120,10 @@ Performance and motion requirements:
 The full work order, with endpoints, scopes, verification predicates, file paths,
 tests, and estimates, is [docs/plan/real-world-readiness.md](docs/plan/real-world-readiness.md).
 
-The gap is execution, not orchestration. Five of the ten action types still exist
-only in the lab, so a phishing report or a bad deploy can be investigated and
-planned but not fixed. This phase makes each one real, or marks it as a manual
-step that is still verified.
+The gap is execution, not orchestration. Two action types still have a lab-only
+provider — Microsoft 365 mail containment — so a phishing report can be
+investigated and planned but not fixed against that provider. This phase makes
+each one real, or marks it as a manual step that is still verified.
 
 1. **Safe defaults.** ✅ Production refuses the lab connector, private probes, a
    missing token, an empty target allowlist, and a short stability window.
@@ -158,6 +158,10 @@ step that is still verified.
    needs: user-visible and functional checks for an outage, a credential-bearing
    predicate for an exposure, and both containment checks for phishing. Only
    required predicates count, so a plan cannot weaken its way to resolution.
+9. **Signed intake.** ✅ Alert sources file incidents through
+   `POST /v1/intake/webhook` with an HMAC over the exact body, a fresh timestamp,
+   a body cap, and replay rejection. With no secret configured the endpoint is
+   disabled, so there is no anonymous way to file an incident.
 
 ### Phase 7 — Multi-process and identity
 

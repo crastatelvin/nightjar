@@ -2,9 +2,11 @@
 
 Base URL: `http://127.0.0.1:8000`
 
-All `/v1` endpoints require `Authorization: Bearer <NIGHTJAR_API_TOKEN>`. Health
-endpoints are unauthenticated so orchestrators can probe them. Errors use
-`{"detail": "..."}` with `404`, `409`, or `422` as appropriate.
+All `/v1` endpoints require `Authorization: Bearer <NIGHTJAR_API_TOKEN>`, except
+the signed alert intake (`POST /v1/intake/webhook`), which is authenticated by an
+HMAC signature instead. Health endpoints are unauthenticated so orchestrators can
+probe them. Errors use `{"detail": "..."}` with `400`, `401`, `404`, `409`, `413`,
+`422`, or `503` as appropriate.
 
 ## Health
 
@@ -64,6 +66,47 @@ reported as `configured`, not `ok`.
 `ok` is false when any provider fails its preflight or any action required by a v1
 incident class has no healthy provider. `nightjarctl doctor` prints the same
 report and exits with the same verdict.
+
+## Alert intake
+
+### `POST /v1/intake/webhook`
+
+Files an incident from an alert source without a bearer token. The request is
+authenticated by a shared secret over the exact bytes received:
+
+```http
+POST /v1/intake/webhook
+Content-Type: application/json
+X-Nightjar-Signature: t=1763000000,v1=<hex hmac-sha256 of "1763000000.<body>">
+X-Nightjar-Delivery: 01a1d3c4
+
+{"title": "Checkout is returning 502",
+ "description": "The status page opened at 09:14.",
+ "incident_class": "site_outage",
+ "severity": "high",
+ "metadata": {"source": "uptime-monitor"},
+ "dedupe_key": "checkout-502"}
+```
+
+The timestamp may instead arrive in `X-Nightjar-Timestamp` with a bare
+`v1=<hex>` or bare hex signature. A request passes if any `v1` candidate
+matches, so a sender can rotate secrets without dropping deliveries.
+
+```json
+{"incident_id": "inc_…", "delivery_id": "01a1d3c4", "deduplicated": false}
+```
+
+- `202` — incident filed (or an existing one returned; `deduplicated` is `true`).
+- `400` — malformed JSON or a non-object body.
+- `401` — missing, stale (default 300 s), or invalid signature.
+- `409` — this delivery id was already accepted.
+- `413` — body larger than `NIGHTJAR_INTAKE_MAX_BODY_BYTES` (default 64 KiB).
+- `422` — the payload does not match the intake schema.
+- `503` — `NIGHTJAR_INTAKE_WEBHOOK_SECRET` is unset, so intake is disabled.
+
+The delivery id is `X-Nightjar-Delivery` when present, otherwise the SHA-256 of
+the body. Replay memory is per process; run one API replica until the Phase 7
+shared lock lands.
 
 ## Incidents
 

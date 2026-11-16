@@ -132,6 +132,35 @@ class IncidentService:
         dedupe_key: str | None = None,
         wait: bool = False,
     ) -> Incident:
+        incident, _ = await self.intake_event(
+            title=title,
+            description=description,
+            incident_class=incident_class,
+            severity=severity,
+            source=source,
+            metadata=metadata,
+            dedupe_key=dedupe_key,
+            wait=wait,
+        )
+        return incident
+
+    async def intake_event(
+        self,
+        *,
+        title: str,
+        description: str = "",
+        incident_class: IncidentClass = IncidentClass.UNKNOWN,
+        severity: Severity = Severity.MEDIUM,
+        source: IncidentSource = IncidentSource.API,
+        metadata: dict[str, Any] | None = None,
+        dedupe_key: str | None = None,
+        wait: bool = False,
+    ) -> tuple[Incident, bool]:
+        """File an incident, returning it and whether it was newly created.
+
+        The flag lets a signed webhook tell a fresh alert from a deduplicated
+        retry without the caller re-reading the case list.
+        """
         safe_description, _ = redact_text(description)
         safe_meta, _ = redact_secrets_obj(metadata or {})
         incident = Incident(
@@ -147,7 +176,7 @@ class IncidentService:
         )
         stored, created = await self.repo.create_incident(incident)
         if not created:
-            return stored
+            return stored, False
         await self.repo.append_event(
             stored.id,
             EventType.INCIDENT_CREATED,
@@ -163,7 +192,7 @@ class IncidentService:
             await self._start_pipeline(stored.id)
         else:
             self._spawn_or_start(stored.id)
-        return await self.repo.get_incident(stored.id)
+        return await self.repo.get_incident(stored.id), True
 
     def _spawn_or_start(self, incident_id: str) -> None:
         if self.settings.orchestrator == "temporal":

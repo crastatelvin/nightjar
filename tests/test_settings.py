@@ -84,3 +84,21 @@ def test_google_with_a_managed_mailbox_is_accepted() -> None:
         managed_targets={"google": {"mailboxes": ["owner@acme.example"]}},
     )
     assert settings.google_service_account_file == "/etc/nightjar/google.json"
+
+
+def test_production_refuses_a_short_intake_webhook_secret() -> None:
+    with pytest.raises(ValidationError) as excinfo:
+        _production(intake_webhook_secret="too-short")
+    assert "NIGHTJAR_INTAKE_WEBHOOK_SECRET" in str(excinfo.value)
+
+
+def test_production_accepts_a_long_intake_webhook_secret() -> None:
+    settings = _production(intake_webhook_secret="s" * 40)
+    assert settings.intake_webhook_secret == "s" * 40
+
+
+def test_intake_is_disabled_by_default() -> None:
+    settings = Settings(_env_file=None)
+    assert settings.intake_webhook_secret is None
+    assert settings.intake_webhook_tolerance_seconds == 300
+    assert settings.intake_max_body_bytes == 65_536

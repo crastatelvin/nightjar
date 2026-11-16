@@ -89,7 +89,8 @@ No Qdrant, no Neo4j, no open-core. One database, one policy engine, one audit le
 src/nightjar/
   core/          domain model, actions, policy, evidence ledger, verification
   agents/        provider-agnostic roles, prompts, runtimes
-  connectors/    typed adapters (lab, HTTP, GitHub, Cloudflare, webhook)
+  connectors/    typed adapters (lab, HTTP, GitHub, Cloudflare, Google,
+                 Vercel, Render, Fly, Stripe, webhook)
   api/           FastAPI control plane and closed incident loop
   worker/        optional Temporal workflow and activities
   lab/           CornerShop synthetic SMB environment
@@ -291,6 +292,10 @@ Real and exercised end to end:
   production, Vercel deployment state and alias, Render deploy/autodeploy state,
   and Fly machine state and update time are read back from the provider before
   the incident resolves;
+- signed alert intake at `POST /v1/intake/webhook`: an HMAC over the exact body,
+  a timestamp inside a 300 s window, a body cap, and replay rejection. The endpoint
+  is disabled (`503`) when no secret is configured, so nobody can file an incident
+  anonymously;
 - GitHub credential revocation, verified by presenting the token and requiring a `401`:
   a `202` from GitHub only means the request was queued, so it is never treated as proof;
 - Stripe assisted revocation: the Dashboard-only step is surfaced with the key's
