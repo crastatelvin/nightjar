@@ -306,6 +306,11 @@ Real and exercised end to end:
 - Gmail quarantine and sender blocking through a delegated service account: the
   message must carry the quarantine label and be out of the inbox, and the filter is
   read back, before the incident resolves;
+- Microsoft 365 containment through an Entra app: a message is moved into a
+  `Nightjar Quarantine` folder (Graph returns a new message id, and the verifier
+  accepts either id), sender blocking is an inbox rule read back by name and
+  sender, and session revocation is proven from `signInActivity` — never from the
+  API's `true`;
 - a policy-enforced target allowlist (`NIGHTJAR_MANAGED_TARGETS`) in both the local and
   Rego engines: a plan that names a zone, repository, mailbox, project, or app outside
   the list is denied before approval, so a prompt-injected plan cannot pick its own
@@ -323,12 +328,10 @@ Real and exercised end to end:
 
 Not yet real:
 
-- Microsoft 365 mail containment has **no production connector**; it runs
-  against the lab only, so those incidents cannot be remediated end to end yet.
-  [docs/plan/real-world-readiness.md](docs/plan/real-world-readiness.md) is the work
-  order that closes this, including the one case that cannot be automated: Stripe has
-  no public API to expire a secret key, so Nightjar proves the key is dead after a
-  human expires it;
+- one case cannot be automated at all: Stripe has no public API to expire a secret
+  key, so Nightjar proves the key is dead after a human expires it;
+  [docs/plan/real-world-readiness.md](docs/plan/real-world-readiness.md) records the
+  remaining work order;
 - no evaluation has been recorded against a hosted model, so model quality, cost, and
   latency numbers are mock-only;
 - one shared bearer token and a self-asserted actor; no per-user identity, RBAC, or rate

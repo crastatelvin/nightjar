@@ -59,6 +59,18 @@ _TARGET_OVERRIDES: dict[tuple[str, ActionType], TargetSpec] = {
     ("fly", ActionType.RESTART_SERVICE): TargetSpec(
         "fly", "apps", ("app_id", "app", "service_id", "service")
     ),
+    ("microsoft", ActionType.QUARANTINE_MESSAGE): TargetSpec(
+        "microsoft", "mailboxes", ("mailbox",), fallback_to_target=False
+    ),
+    ("microsoft", ActionType.BLOCK_SENDER): TargetSpec(
+        "microsoft", "mailboxes", ("mailbox",), fallback_to_target=False
+    ),
+    ("microsoft", ActionType.REVOKE_CREDENTIAL): TargetSpec(
+        "microsoft",
+        "mailboxes",
+        ("mailbox", "upn", "user", "user_id"),
+        fallback_to_target=False,
+    ),
 }
 
 # Repository and mailbox identifiers are case-insensitive at every provider.

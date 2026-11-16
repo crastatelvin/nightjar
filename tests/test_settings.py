@@ -102,3 +102,39 @@ def test_intake_is_disabled_by_default() -> None:
     assert settings.intake_webhook_secret is None
     assert settings.intake_webhook_tolerance_seconds == 300
     assert settings.intake_max_body_bytes == 65_536
+
+
+def test_partial_microsoft_credentials_are_refused_in_development() -> None:
+    with pytest.raises(ValidationError) as excinfo:
+        Settings(_env_file=None, microsoft_tenant_id="contoso.onmicrosoft.com")
+    assert "NIGHTJAR_MICROSOFT_CLIENT_SECRET" in str(excinfo.value)
+
+
+def test_microsoft_requires_a_managed_mailbox_in_production() -> None:
+    with pytest.raises(ValidationError) as excinfo:
+        _production(
+            microsoft_tenant_id="contoso.onmicrosoft.com",
+            microsoft_client_id="client-id",
+            microsoft_client_secret="client-secret",
+        )
+    assert "microsoft.mailboxes" in str(excinfo.value)
+
+
+def test_microsoft_with_a_managed_mailbox_is_accepted() -> None:
+    settings = _production(
+        microsoft_tenant_id="contoso.onmicrosoft.com",
+        microsoft_client_id="client-id",
+        microsoft_client_secret="client-secret",
+        managed_targets={"microsoft": {"mailboxes": ["owner@acme.example"]}},
+    )
+    assert settings.microsoft_tenant_id == "contoso.onmicrosoft.com"
+
+
+def test_a_negative_propagation_window_is_refused() -> None:
+    with pytest.raises(ValidationError) as excinfo:
+        Settings(_env_file=None, microsoft_propagation_seconds=-1)
+    assert "microsoft_propagation_seconds" in str(excinfo.value)
+
+
+def test_the_microsoft_propagation_window_defaults_to_three_minutes() -> None:
+    assert Settings(_env_file=None).microsoft_propagation_seconds == 180

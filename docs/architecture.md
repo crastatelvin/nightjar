@@ -71,8 +71,8 @@ domain code, prompt schema, or test.
 Connectors translate typed actions and probes into provider calls. The
 registry refuses ambiguous mappings, duplicate tool names, unknown read tools,
 and oversized parameters. `http` is read-only; `lab` is the synthetic
-environment; `github`, `cloudflare`, `google`, `vercel`, `render`, and `fly` are
-real adapters; `webhook` sends signed notifications.
+environment; `github`, `cloudflare`, `google`, `microsoft`, `vercel`, `render`,
+`fly`, and `stripe` are real adapters; `webhook` sends signed notifications.
 
 Deploy actions are read back rather than trusted. Cloudflare under-attack is
 verified by re-reading the zone's security level, and a Pages rollback is
@@ -118,6 +118,19 @@ delegation and impersonates one managed mailbox per request, so Nightjar never
 holds a user password or refresh token. Quarantine is a label plus removal from
 `INBOX`/`UNREAD`; sender blocking is a Gmail filter. Both are read back by the
 verifier, and an existing filter is replayed rather than duplicated.
+
+The Microsoft 365 connector uses an Entra app with admin-consented application
+permissions and no user credential at all. Quarantine is a move into a
+`Nightjar Quarantine` folder, and Graph answers a move with a **new** message id,
+so the action returns `new_message_id` and the verifier tries the original and
+the new id, treating a `404` as "this id is gone, try the next one". Sender
+blocking is an inbox `messageRules` entry read back by display name and sender.
+Session revocation is proven from `signInActivity`: a check that cannot read it
+fails closed with the `AuditLog.Read.All` + Entra ID P1 requirement instead of
+trusting the API's `true`. Verification never creates the quarantine folder; a
+missing folder is a failed predicate, not a side effect. Every check converts a
+connector error into a verification failure, so a provider outage is a failed
+proof rather than a crashed verifier.
 
 Each connector declares `capabilities()` — the actions it can really perform and
 the kinds of target they need — and implements `preflight()`, which answers "can

@@ -119,6 +119,13 @@ class Settings(BaseSettings):
     google_api_url: str = "https://gmail.googleapis.com"
     google_oauth_url: str = "https://oauth2.googleapis.com/token"
     google_quarantine_label: str = "Nightjar-Quarantine"
+    microsoft_tenant_id: str | None = None
+    microsoft_client_id: str | None = None
+    microsoft_client_secret: str | None = None
+    microsoft_graph_url: str = "https://graph.microsoft.com/v1.0"
+    microsoft_login_url: str = "https://login.microsoftonline.com"
+    microsoft_quarantine_folder: str = "Nightjar Quarantine"
+    microsoft_propagation_seconds: int = Field(default=180, ge=0)
     notify_webhook_url: str | None = None
     notify_webhook_secret: str | None = None
 
@@ -147,6 +154,16 @@ class Settings(BaseSettings):
         prober that can reach link-local metadata, an unauthenticated API, and
         an agent with no target allowlist.
         """
+        configured = [
+            self.microsoft_tenant_id,
+            self.microsoft_client_id,
+            self.microsoft_client_secret,
+        ]
+        if any(configured) and not all(configured):
+            raise ValueError(
+                "Microsoft 365 needs NIGHTJAR_MICROSOFT_TENANT_ID, "
+                "NIGHTJAR_MICROSOFT_CLIENT_ID, and NIGHTJAR_MICROSOFT_CLIENT_SECRET together"
+            )
         if self.environment != "production":
             return self
         problems: list[str] = []
@@ -170,6 +187,13 @@ class Settings(BaseSettings):
         if self.intake_webhook_secret and len(self.intake_webhook_secret) < 32:
             problems.append(
                 "NIGHTJAR_INTAKE_WEBHOOK_SECRET must be at least 32 characters in production"
+            )
+        if self.microsoft_tenant_id and not self.managed_targets.get("microsoft", {}).get(
+            "mailboxes"
+        ):
+            problems.append(
+                "NIGHTJAR_MANAGED_TARGETS.microsoft.mailboxes is required when the "
+                "Microsoft 365 connector is configured"
             )
         if problems:
             raise ValueError("unsafe production configuration: " + "; ".join(problems))

@@ -120,10 +120,10 @@ Performance and motion requirements:
 The full work order, with endpoints, scopes, verification predicates, file paths,
 tests, and estimates, is [docs/plan/real-world-readiness.md](docs/plan/real-world-readiness.md).
 
-The gap is execution, not orchestration. Two action types still have a lab-only
-provider — Microsoft 365 mail containment — so a phishing report can be
-investigated and planned but not fixed against that provider. This phase makes
-each one real, or marks it as a manual step that is still verified.
+The gap was execution, not orchestration. Every v1 action type now has at least
+one real provider: containment and revocation on both mail platforms, rollback on
+three deploy platforms, restart on two, and a verified manual step where no API
+exists. What remains in this phase is hardening, not reach.
 
 1. **Safe defaults.** ✅ Production refuses the lab connector, private probes, a
    missing token, an empty target allowlist, and a short stability window.
@@ -131,16 +131,20 @@ each one real, or marks it as a manual step that is still verified.
    typed errors, local idempotency, per-provider rate limits, and the redaction
    registry are open.
 3. **Credential revocation.** ✅ GitHub PAT/OAuth/App tokens via the
-   unauthenticated revocation API, proven dead by a `401` probe. Google OAuth
-   and Microsoft sessions are open. ✅ Stripe has no public revoke API, so it is
+   unauthenticated revocation API, proven dead by a `401` probe. ✅ Microsoft
+   sessions are revoked through Graph and proven from `signInActivity`, failing
+   closed when the tenant lacks audit access. Google OAuth revocation is open.
+   ✅ Stripe has no public revoke API, so it is
    a typed manual step: Nightjar shows the exact Dashboard action and fingerprint,
    pauses the incident, and resolves only after the exposed key returns a `401`
    (Basic auth, because a live key would also reject Bearer). ✅ Manual steps are
    visible in the case file, attestation is recorded as `human_note` evidence,
    and the predicate — not the human's word — decides resolution.
-4. **Mail containment.** ✅ Google Workspace labels and filters, read back before
-   the incident can resolve. Microsoft 365 message move, inbox rules, and
-   session revocation are open.
+4. **Mail containment.** ✅ Google Workspace labels and filters, and Microsoft 365
+   message moves, inbox rules, and session revocation, all read back before the
+   incident can resolve. A Graph move returns a new message id and the verifier
+   handles both; session proof reads `signInActivity` and fails closed when the
+   tenant cannot provide it.
 5. **Deploy and runtime.** ✅ Cloudflare Pages, Vercel, and Render rollback, each
    validated against a successful production deployment and read back from the
    provider (Vercel also checks the production alias). ✅ Render and Fly restart.

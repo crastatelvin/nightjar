@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -304,3 +305,64 @@ def test_a_manual_capability_without_instructions_fails_closed() -> None:
 
     with pytest.raises(ConnectorError, match="cannot describe the step"):
         registry.manual_step(action)
+
+
+def test_microsoft_appears_only_with_all_three_credentials() -> None:
+    settings = Settings(
+        _env_file=None,
+        microsoft_tenant_id="contoso.onmicrosoft.com",
+        microsoft_client_id="client-id",
+        microsoft_client_secret="client-secret",
+        managed_targets={"microsoft": {"mailboxes": ["owner@acme.example"]}},
+    )
+    assert "microsoft" in names(settings)
+    registry = build_registry(settings)
+    assert "microsoft.message" in registry.tools()
+    assert "microsoft.message_folder" in registry.verification_checks()
+    assert "microsoft.sessions_revoked" in registry.verification_checks()
+
+
+def test_google_and_microsoft_coexist_without_duplicate_registration(
+    tmp_path: Path,
+) -> None:
+    settings = Settings(
+        _env_file=None,
+        google_service_account_file=str(tmp_path / "not-read-at-startup.json"),
+        microsoft_tenant_id="contoso.onmicrosoft.com",
+        microsoft_client_id="client-id",
+        microsoft_client_secret="client-secret",
+        managed_targets={
+            "google": {"mailboxes": ["owner@acme.example"]},
+            "microsoft": {"mailboxes": ["owner@acme.example"]},
+        },
+    )
+    registry = build_registry(settings)
+    assert registry.providers_for(ActionType.QUARANTINE_MESSAGE) == ["google", "microsoft"]
+    assert registry.providers_for(ActionType.BLOCK_SENDER) == ["google", "microsoft"]
+    tools = [tool for connector in registry.connectors for tool in connector.tool_names]
+    assert len(tools) == len(set(tools))
+    checks = [name for connector in registry.connectors for name in connector.verification_checks()]
+    assert len(checks) == len(set(checks))
+
+
+def test_the_lab_never_shadows_microsoft_containment() -> None:
+    settings = Settings(
+        _env_file=None,
+        microsoft_tenant_id="contoso.onmicrosoft.com",
+        microsoft_client_id="client-id",
+        microsoft_client_secret="client-secret",
+        managed_targets={"microsoft": {"mailboxes": ["owner@acme.example"]}},
+    )
+    registry = build_registry(settings)
+    lab = next(connector for connector in registry.connectors if connector.name == "lab")
+    assert ActionType.QUARANTINE_MESSAGE not in lab.action_types
+    assert ActionType.BLOCK_SENDER not in lab.action_types
+    with pytest.raises(ConnectorError, match="no connector available"):
+        registry.connector_for(
+            ActionSpec(
+                action_type=ActionType.QUARANTINE_MESSAGE,
+                target="msg-1",
+                params={"connector": "lab", "mailbox": "owner@acme.example", "message_id": "msg-1"},
+                risk=RiskClass.R1,
+            )
+        )

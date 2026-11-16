@@ -37,6 +37,13 @@ Use this before exposing a Nightjar deployment to a real organization. Items mar
 - [ ] Cloudflare: API token limited to the zones Nightjar manages, with cache purge
       and under-attack permissions only.
 - [ ] Mail: a dedicated account or app password with the minimum mailbox scope.
+- [ ] Google Workspace: a service account with domain-wide delegation limited to
+      `gmail.modify` and `gmail.settings.basic`, and only the managed mailboxes.
+- [ ] Microsoft 365: an Entra app with `Mail.ReadWrite`,
+      `MailboxSettings.ReadWrite`, and `User.RevokeSessions.All`, scoped to the
+      managed mailboxes by an application access policy. Session proof also needs
+      `AuditLog.Read.All` and Entra ID P1; without them the check fails closed.
+      Never grant `User.ReadWrite.All` or directory roles.
 - [ ] Store secrets in the environment or a secret manager. `.env` is gitignored;
       never bake secrets into images.
 - [ ] Rotate on a schedule and immediately after any suspected exposure.

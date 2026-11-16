@@ -225,3 +225,48 @@ def test_cloudflare_and_vercel_rollback_still_use_projects() -> None:
     target = resolve_target(action)
     assert target is not None
     assert (target.provider, target.kind, target.value) == ("vercel", "projects", "prj-1")
+
+
+def test_a_microsoft_mail_action_is_managed_by_mailbox() -> None:
+    action = ActionSpec(
+        action_type=ActionType.QUARANTINE_MESSAGE,
+        target="msg-1",
+        params={
+            "connector": "microsoft",
+            "mailbox": "Owner@Acme.Example",
+            "message_id": "msg-1",
+        },
+        risk=RiskClass.R1,
+    )
+    target = resolve_target(action)
+    assert target is not None
+    assert (target.provider, target.kind, target.value) == (
+        "microsoft",
+        "mailboxes",
+        "owner@acme.example",
+    )
+
+
+def test_a_microsoft_mail_action_never_falls_back_to_the_message_id() -> None:
+    action = ActionSpec(
+        action_type=ActionType.QUARANTINE_MESSAGE,
+        target="msg-1",
+        params={"connector": "microsoft", "message_id": "msg-1"},
+        risk=RiskClass.R1,
+    )
+    managed = normalize_managed_targets({"microsoft": {"mailboxes": ["owner@acme.example"]}})
+    assert target_allowed(resolve_target(action), managed) is False
+
+
+def test_microsoft_session_revocation_is_managed_by_the_user() -> None:
+    action = ActionSpec(
+        action_type=ActionType.REVOKE_CREDENTIAL,
+        target="cred-1",
+        params={"connector": "microsoft", "upn": "owner@acme.example"},
+        risk=RiskClass.R2,
+    )
+    managed = normalize_managed_targets({"microsoft": {"mailboxes": ["owner@acme.example"]}})
+    target = resolve_target(action)
+    assert target is not None
+    assert (target.kind, target.value) == ("mailboxes", "owner@acme.example")
+    assert target_allowed(target, managed) is True

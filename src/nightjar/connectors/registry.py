@@ -16,6 +16,7 @@ from nightjar.connectors.github import GitHubConnector
 from nightjar.connectors.google_workspace import GoogleWorkspaceConnector
 from nightjar.connectors.http import HttpConnector
 from nightjar.connectors.lab import LabConnector
+from nightjar.connectors.microsoft365 import Microsoft365Connector
 from nightjar.connectors.render import RenderConnector
 from nightjar.connectors.stripe import StripeConnector
 from nightjar.connectors.vercel import VercelConnector
@@ -189,6 +190,23 @@ def build_registry(settings: Settings) -> ConnectorRegistry:
                 api_url=settings.google_api_url,
                 oauth_url=settings.google_oauth_url,
                 quarantine_label=settings.google_quarantine_label,
+            )
+        )
+    if (
+        settings.microsoft_tenant_id
+        and settings.microsoft_client_id
+        and settings.microsoft_client_secret
+    ):
+        real.append(
+            Microsoft365Connector(
+                settings.microsoft_tenant_id,
+                settings.microsoft_client_id,
+                settings.microsoft_client_secret,
+                mailboxes=tuple(settings.managed_targets.get("microsoft", {}).get("mailboxes", [])),
+                graph_url=settings.microsoft_graph_url,
+                login_url=settings.microsoft_login_url,
+                quarantine_folder=settings.microsoft_quarantine_folder,
+                propagation_seconds=settings.microsoft_propagation_seconds,
             )
         )
     if settings.notify_webhook_url:

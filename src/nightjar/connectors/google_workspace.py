@@ -327,14 +327,33 @@ class GoogleWorkspaceConnector:
             "google.filter_present": self._check_filter_present,
         }
 
+    async def _check_json(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
+        """A connector failure is a failed predicate, not a crashed verifier."""
+        try:
+            return await self._json(*args, **kwargs)
+        except ConnectorError as exc:
+            raise VerificationError(str(exc)) from exc
+
+    async def _check_label_id(self, mailbox: str, name: str) -> str:
+        try:
+            return await self._label_id(mailbox, name)
+        except ConnectorError as exc:
+            raise VerificationError(str(exc)) from exc
+
+    async def _check_filters(self, mailbox: str) -> list[dict[str, Any]]:
+        try:
+            return await self._filters(mailbox)
+        except ConnectorError as exc:
+            raise VerificationError(str(exc)) from exc
+
     async def _check_message_quarantined(self, predicate: VerificationPredicate) -> dict[str, Any]:
         mailbox = self._mailbox(predicate.params.get("mailbox"))
         message_id = str(predicate.params.get("message_id", "")).strip()
         if not message_id:
             raise VerificationError("google.message_quarantined requires message_id")
         label = str(predicate.params.get("quarantine_label") or self._label)
-        label_id = await self._label_id(mailbox, label)
-        body = await self._json(
+        label_id = await self._check_label_id(mailbox, label)
+        body = await self._check_json(
             "GET",
             f"/gmail/v1/users/{_q(mailbox)}/messages/{_q(message_id)}",
             mailbox,
@@ -355,8 +374,8 @@ class GoogleWorkspaceConnector:
         if not sender:
             raise VerificationError("google.filter_present requires sender")
         label = str(predicate.params.get("quarantine_label") or self._label)
-        label_id = await self._label_id(mailbox, label)
-        for existing in await self._filters(mailbox):
+        label_id = await self._check_label_id(mailbox, label)
+        for existing in await self._check_filters(mailbox):
             criteria = existing.get("criteria") or {}
             target_action = existing.get("action") or {}
             if str(criteria.get("from", "")).lower() == sender.lower() and label_id in (

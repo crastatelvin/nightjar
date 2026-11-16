@@ -51,7 +51,8 @@ recorded incidents, one per class, with chain verification green.
 | `http.get` probe | Real, SSRF-guarded | `connectors/http.py` |
 | `revoke_credential` (GitHub) | **Real HTTP**, proven by a 401 probe | `connectors/github.py` |
 | `quarantine_message`, `block_sender` (Google) | **Real HTTP** | `connectors/google_workspace.py` |
-| `quarantine_message`, `block_sender` (Microsoft) | **Lab only** | `connectors/lab.py` |
+| `quarantine_message`, `block_sender` (Microsoft) | **Real HTTP**; the move's new message id is verified | `connectors/microsoft365.py` |
+| `revoke_credential` (Microsoft sessions) | **Real HTTP**, proven by `signInActivity`, fails closed without audit access | `connectors/microsoft365.py` |
 | `rollback_deployment` (Cloudflare Pages, Vercel, Render) | **Real HTTP**, read back from production | `connectors/cloudflare.py`, `connectors/vercel.py`, `connectors/render.py` |
 | `restart_service` (Render) | **Real HTTP**, verified live and not suspended | `connectors/render.py` |
 | `restart_service` (Fly) | **Real HTTP**, verified by state and `updated_at` | `connectors/fly.py` |
@@ -475,22 +476,47 @@ and sender. Deletion is the rollback.
 
 **Revoke sessions.** `POST /users/{upn}/revokeSignInSessions` → `200 true`.
 Propagation is a few minutes. Verification cannot be a token probe in general
-(there is no universal token to present), so the predicate is:
-
-- `GET /users/{upn}?$select=signInActivity` and compare
-  `lastSignInDateTime` to the revocation timestamp, **or**
-- a `ConnectorCheck` that confirms the Graph call returned `true` and then waits
-  `NIGHTJAR_GRAPH_PROPAGATION_SECONDS` (default 180) before a stability check.
+(there is no universal token to present), so the predicate reads
+`GET /users/{upn}?$select=signInActivity` and requires the latest interactive and
+non-interactive sign-in to be at or before the revocation timestamp plus
+`NIGHTJAR_MICROSOFT_PROPAGATION_SECONDS` (default 180). Reading that property
+needs `AuditLog.Read.All` and Entra ID P1; when Graph returns no activity the
+check fails closed rather than accepting the API's `true` as proof.
 
 Document that session revocation does not revoke already-issued refresh tokens
 immediately and does not disable the account. If the credential class requires
 account disable, that is a separate R3 action and is out of v1.
 
-**Failure modes.** `403 Authorization_RequestDenied` → missing admin consent.
-`404` → mailbox or message gone. `429` → `Retry-After`.
+**Failure modes.** `403 Authorization_RequestDenied` → missing admin consent or an
+application access policy that excludes the mailbox. `404` → mailbox or message
+gone. `429` → `Retry-After` is surfaced on the error and the action is retryable.
 
-**Config.** `NIGHTJAR_MS_TENANT_ID`, `NIGHTJAR_MS_CLIENT_ID`,
-`NIGHTJAR_MS_CLIENT_SECRET`, `NIGHTJAR_MS_MAILBOXES`.
+**Implementation.** `Microsoft365Connector` (`connectors/microsoft365.py`):
+
+- the app token is cached until 60 s before expiry;
+- `_folder_id` reuses `Nightjar Quarantine` and creates it only during execution,
+  never during verification;
+- quarantine returns `new_message_id`, and `microsoft.message_folder` tries
+  `message_id`, `new_message_id`, then `previous_message_id`, treating a `404` as
+  "try the next id" rather than a hard failure;
+- `microsoft.rule_present` matches display name and sender, and reports
+  `isEnabled`;
+- `microsoft.sessions_revoked` reads `signInActivity`, passes only when the latest
+  interactive and non-interactive sign-in are at or before `since + grace`, and
+  **fails closed with an explicit `AuditLog.Read.All` + Entra ID P1 message** when
+  Graph returns no activity instead of trusting the API's `true`;
+- every verification helper converts `ConnectorError` to `VerificationError`, so a
+  provider failure is a failed predicate, not a crashed verifier;
+- mail actions resolve the mailbox from `params.mailbox` or the single managed
+  mailbox and never fall back to `action.target`, which is the message id or the
+  sender.
+
+**Config.** `NIGHTJAR_MICROSOFT_TENANT_ID`, `NIGHTJAR_MICROSOFT_CLIENT_ID`,
+`NIGHTJAR_MICROSOFT_CLIENT_SECRET`, `NIGHTJAR_MICROSOFT_GRAPH_URL`,
+`NIGHTJAR_MICROSOFT_LOGIN_URL`, `NIGHTJAR_MICROSOFT_QUARANTINE_FOLDER`,
+`NIGHTJAR_MICROSOFT_PROPAGATION_SECONDS`, and
+`NIGHTJAR_MANAGED_TARGETS.microsoft.mailboxes`. The three credentials must be set
+together; production refuses Microsoft without a managed mailbox.
 
 ### 5.5 Cloudflare — cache, security level, Pages
 
@@ -836,7 +862,7 @@ real gate, not a label.
 | `NIGHTJAR_GITHUB_APP_ID`, `_APP_PRIVATE_KEY`, `_INSTALLATION_ID`, `_ORG` | org PAT revocation |
 | `NIGHTJAR_STRIPE_SECRET_KEY` | read-only revocation probe |
 | `NIGHTJAR_GOOGLE_SERVICE_ACCOUNT_JSON`, `_IMPERSONATE`, `_WORKSPACE_DOMAINS` | Workspace |
-| `NIGHTJAR_MS_TENANT_ID`, `_CLIENT_ID`, `_CLIENT_SECRET`, `_MAILBOXES` | Microsoft |
+| `NIGHTJAR_MICROSOFT_TENANT_ID`, `_CLIENT_ID`, `_CLIENT_SECRET`, `_GRAPH_URL`, `_PROPAGATION_SECONDS` | Microsoft 365 |
 | `NIGHTJAR_VERCEL_TOKEN`, `_TEAM_ID`, `_PROJECT_ID` | Vercel |
 | `NIGHTJAR_RENDER_API_KEY`, `_SERVICE_ID` | Render |
 | `NIGHTJAR_FLY_API_TOKEN`, `_APP` | Fly |
@@ -1043,7 +1069,8 @@ Estimates are focused engineering hours, including tests and docs.
 
 Status: ✅ shipped in this phase. 6.16 is complete: outbound notifications are
 signed and inbound intake verifies the same scheme, rejects stale timestamps, and
-rejects replays. 6.9 is shipped for Google Workspace; Microsoft 365 (6.10) is open.
+rejects replays. Both mail providers are shipped: Google Workspace (6.9) and
+Microsoft 365 (6.10).
 
 | ID | Task | Files | Acceptance | Est |
 |---|---|---|---|---|
@@ -1056,7 +1083,7 @@ rejects replays. 6.9 is shipped for Google Workspace; Microsoft 365 (6.10) is op
 | 6.7 ✅ | GitHub revocation connector (3 modes) | `connectors/github.py`, tests | 202 recorded; probe 401 passes; 403 fails | 10 |
 | 6.8 ✅ | `CredentialCheck` + `PredicateKind.CREDENTIAL` wiring | `core/verification.py`, `api/service.py`, tests | revoked → pass, live → fail, 403 → fail | 6 |
 | 6.9 ✅ | Google Workspace connector: quarantine + filter | `connectors/google_workspace.py`, tests | label present/INBOX absent; filter read back | 14 |
-| 6.10 | Microsoft 365 connector: move + rule + revoke sessions | `connectors/microsoft365.py`, tests | new message id handled; rule read back | 16 |
+| 6.10 ✅ | Microsoft 365 connector: move + rule + revoke sessions | `connectors/microsoft365.py`, tests | new message id handled; rule read back | 16 |
 | 6.11 ✅ | Stripe assisted revocation (`MANUAL_STEP` + probe) | `connectors/stripe.py`, `core/verification.py`, `api/service.py` | manual step visible; 401 passes; 403 fails | 8 |
 | 6.12 ✅ | Cloudflare Pages rollback + read-back checks | `connectors/cloudflare.py`, tests | production deployment id verified | 8 |
 | 6.13 ✅ | Vercel rollback + alias verification | `connectors/vercel.py`, tests | `READY`, alias present | 8 |
@@ -1188,7 +1215,7 @@ Nightjar 0.1 ships only when every line is checked and linked to evidence.
 | Cloudflare | API token: Cache Purge, Zone Settings Write, Pages Write, Zone Read | `NIGHTJAR_CLOUDFLARE_TOKEN` |
 | GitHub | fine-grained PAT or GitHub App with org PAT write | `NIGHTJAR_GITHUB_TOKEN` / app vars |
 | Google | service account, DWD with `gmail.modify` + `gmail.settings.basic` | `NIGHTJAR_GOOGLE_SERVICE_ACCOUNT_JSON` |
-| Microsoft | Entra app, `Mail.ReadWrite`, `MailboxSettings.ReadWrite`, `User.RevokeSessions.All`, admin consent, application access policy | `NIGHTJAR_MS_*` |
+| Microsoft | Entra app, `Mail.ReadWrite`, `MailboxSettings.ReadWrite`, `User.RevokeSessions.All`, plus `AuditLog.Read.All` and Entra ID P1 for session proof; admin consent; application access policy | `NIGHTJAR_MICROSOFT_*` |
 | Stripe | restricted key with the minimum read scope for the probe | `NIGHTJAR_STRIPE_SECRET_KEY` |
 | Vercel | token scoped to the project, team id | `NIGHTJAR_VERCEL_*` |
 | Render | API key with `services:read`, `deploys:write`, `services:write` | `NIGHTJAR_RENDER_*` |
@@ -1201,6 +1228,9 @@ Nightjar 0.1 ships only when every line is checked and linked to evidence.
 - Google "block sender" is a filter, not an SMTP block. Admin console routing
   rules are out of scope.
 - Microsoft session revocation is not account disable and is not instant.
+- Microsoft "block sender" is an inbox message rule on the managed mailbox, not a
+  tenant-wide transport rule; tenant-wide blocking is Exchange admin scope and out
+  of v1.
 - Cloudflare Pages rollback requires a previous successful production deployment.
 - Render rollback requires a retained build artifact.
 - Fly restart wipes the ephemeral filesystem by design.

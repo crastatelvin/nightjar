@@ -98,6 +98,15 @@ outbound-only connectors, SSRF guard on probes.
 tokens, rotate them, and keep the database on a private network. Nightjar does not
 claim to survive a root compromise of its own host.
 
+A mailbox connector is the broadest token Nightjar holds. Google is limited by
+domain-wide delegation scopes and Microsoft by an application access policy, so
+the token can act only on the managed mailboxes; without that policy an Entra app
+with `Mail.ReadWrite` can read every mailbox in the tenant. Session revocation is
+not account disable and is not instant: already-issued refresh tokens can survive
+until they expire, and the proof reads `signInActivity` with a propagation grace
+window. When the tenant lacks `AuditLog.Read.All` or Entra ID P1, Nightjar fails
+the predicate rather than claiming a revocation it cannot prove.
+
 ### 5. SSRF and internal network probing
 
 **Controls:** every HTTP/JSON/DNS/TLS probe passes `validate_url`, which rejects
