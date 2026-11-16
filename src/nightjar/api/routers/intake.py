@@ -143,15 +143,21 @@ async def intake_webhook(
             detail=f"delivery {delivery_id!r} was already accepted",
         )
 
-    incident, created = await service.intake_event(
-        title=payload.title,
-        description=payload.description,
-        incident_class=payload.incident_class,
-        severity=payload.severity,
-        source=IncidentSource.WEBHOOK,
-        metadata=payload.metadata,
-        dedupe_key=payload.dedupe_key or f"webhook:{delivery_id}",
-    )
+    try:
+        incident, created = await service.intake_event(
+            title=payload.title,
+            description=payload.description,
+            incident_class=payload.incident_class,
+            severity=payload.severity,
+            source=IncidentSource.WEBHOOK,
+            metadata=payload.metadata,
+            dedupe_key=payload.dedupe_key or f"webhook:{delivery_id}",
+        )
+    except Exception:
+        # The delivery was not filed, so the sender's retry must not be answered
+        # with 409. Releasing the claim keeps the alert recoverable.
+        await request.app.state.intake_replay.release(delivery_id)
+        raise
     return schemas.IntakeAccepted(
         incident_id=incident.id,
         delivery_id=delivery_id,

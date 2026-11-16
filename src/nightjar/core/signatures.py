@@ -107,11 +107,12 @@ def verify_signature(
 
 
 class ReplayGuard:
-    """Remember accepted delivery ids for the signature tolerance window.
+    """An in-memory delivery-id guard for one process.
 
-    This is per process. Multi-process replay protection needs a shared store and
-    lands with the Phase 7 advisory locks; until then a second replica could
-    accept a replay, which is why the API is not horizontally scaled in v1.
+    This is the right tool for a single-process embedder and for tests. The API
+    itself uses :class:`nightjar.api.replay.PostgresReplayStore`, because a
+    captured delivery can be replayed at any replica and only a shared store can
+    make the claim atomic across processes.
     """
 
     def __init__(self, *, ttl_seconds: int = 600, max_entries: int = 10_000) -> None:

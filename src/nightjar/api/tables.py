@@ -232,6 +232,26 @@ class AgentRunRow(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
+class IntakeDeliveryRow(Base):
+    """Accepted webhook delivery ids, shared by every API replica.
+
+    A signed delivery is only replayable while its timestamp is inside the
+    signature tolerance window, so rows older than that window are pruned. The
+    primary key includes the tenant because the delivery id comes from the
+    sender and is only unique within one sender's stream.
+    """
+
+    __tablename__ = "intake_deliveries"
+
+    tenant_id: Mapped[str] = mapped_column(
+        ForeignKey("tenants.id", ondelete="CASCADE"), primary_key=True
+    )
+    delivery_id: Mapped[str] = mapped_column(String(200), primary_key=True)
+    seen_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, nullable=False, index=True
+    )
+
+
 class NoteRow(Base):
     __tablename__ = "notes"
 

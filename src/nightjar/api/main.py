@@ -15,6 +15,7 @@ from nightjar import __version__
 from nightjar.agents.runtime import build_runtime
 from nightjar.api import db
 from nightjar.api.locks import LockBusy, scheduler_leader
+from nightjar.api.replay import PostgresReplayStore
 from nightjar.api.repository import ConflictError, NotFoundError, Repository
 from nightjar.api.routers import approvals, health, incidents, intake, meta
 from nightjar.api.service import IncidentService
@@ -23,7 +24,6 @@ from nightjar.connectors.registry import build_registry
 from nightjar.core.actions import ActionValidationError
 from nightjar.core.enums import PredicateKind
 from nightjar.core.policy import LocalPolicyEngine, OpaPolicyEngine
-from nightjar.core.signatures import ReplayGuard
 from nightjar.core.verification import ConnectorCheck, Verifier
 
 log = logging.getLogger(__name__)
@@ -85,8 +85,10 @@ def create_app(
     )
     api.state.settings = resolved
     api.state.service = service
-    api.state.intake_replay = ReplayGuard(
-        ttl_seconds=max(resolved.intake_webhook_tolerance_seconds * 2, 600)
+    api.state.intake_replay = PostgresReplayStore(
+        db.get_session_factory,
+        tenant_id=resolved.tenant_id,
+        ttl_seconds=max(resolved.intake_webhook_tolerance_seconds * 2, 600),
     )
 
     api.add_middleware(

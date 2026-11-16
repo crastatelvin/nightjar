@@ -155,7 +155,11 @@ Alert intake is the one mutating route that does not take a bearer token. It is
 authenticated by an HMAC-SHA256 over `"<timestamp>.<body>"`, compared in constant
 time, with a 300 s timestamp window, a body cap, and a delivery-id replay guard.
 An unset secret disables the route with `503`, so a deployment cannot
-accidentally accept anonymous incidents.
+accidentally accept anonymous incidents. The replay guard is a row in
+`intake_deliveries` claimed with `INSERT ... ON CONFLICT DO NOTHING`, so a capture
+replayed at a second replica is rejected by the database rather than by one
+process's memory; a failed filing releases the claim instead of burning the
+delivery id.
 
 Per-incident work is serialized across processes with PostgreSQL session-level
 advisory locks on a dedicated connection (a `NullPool` engine, because a pooled
@@ -247,7 +251,7 @@ start that way.
 9. No action can reach a provider, zone, repository, mailbox, project, or app
    that is not in the operator's allowlist.
 10. Inbound intake is disabled without a secret; an accepted delivery is signed,
-    fresh, and seen once.
+    fresh, and claimed exactly once across every replica.
 
 ## Data model
 
@@ -264,6 +268,7 @@ start that way.
 | `verifications` | predicate results by phase |
 | `agent_runs` | provider, model, tokens, cost, latency |
 | `notes` | operator annotations |
+| `intake_deliveries` | accepted webhook delivery ids, claimed atomically across replicas |
 
 Actions are scoped to their plan. A retry creates a new plan; older plans remain
 in history and the current plan is what policy and execution consider.

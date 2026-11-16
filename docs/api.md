@@ -105,9 +105,12 @@ matches, so a sender can rotate secrets without dropping deliveries.
 - `503` — `NIGHTJAR_INTAKE_WEBHOOK_SECRET` is unset, so intake is disabled.
 
 The delivery id is `X-Nightjar-Delivery` when present, otherwise the SHA-256 of
-the body. The replay guard is per process; per-incident work is already
-cross-process safe through PostgreSQL advisory locks, but the replay guard still
-needs a shared store before running several API replicas.
+the body. Accepted ids live in the `intake_deliveries` table, so the claim is
+atomic across replicas: `INSERT ... ON CONFLICT DO NOTHING` lets exactly one
+process accept a delivery and answers every other one with `409`. Rows older than
+twice the signature tolerance are pruned. If filing the incident fails after the
+claim, the claim is released so the sender's retry is not answered with `409`
+and the alert is not lost.
 
 ## Incidents
 

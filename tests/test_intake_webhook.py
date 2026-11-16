@@ -253,3 +253,41 @@ def test_a_chunked_body_over_the_cap_is_rejected(client: TestClient, webhook_sec
 
     assert response.status_code == 413
     assert incident_count(client) == 0
+
+
+def test_the_replay_store_is_shared_between_replicas(
+    client: TestClient, webhook_secret: str
+) -> None:
+    """Two API processes, one database: a capture replayed at the other replica dies."""
+    from nightjar.api.main import create_app
+
+    settings = client.app.state.settings
+    first = post(client, webhook_secret, alert(), delivery="dlv-shared")
+    assert first.status_code == 202
+
+    with TestClient(create_app(settings)) as other:
+        second = post(other, webhook_secret, alert(), delivery="dlv-shared")
+
+    assert second.status_code == 409
+    assert "already accepted" in second.json()["detail"]
+
+
+def test_a_failed_filing_releases_the_delivery(client: TestClient, webhook_secret: str) -> None:
+    """A server error must not burn the sender's delivery id and lose the alert."""
+    service = client.app.state.service
+    original = service.intake_event
+
+    async def boom(**kwargs: Any) -> Any:
+        raise RuntimeError("database is down")
+
+    service.intake_event = boom
+    try:
+        with pytest.raises(RuntimeError, match="database is down"):
+            post(client, webhook_secret, alert(), delivery="dlv-retry")
+    finally:
+        service.intake_event = original
+
+    retry = post(client, webhook_secret, alert(), delivery="dlv-retry")
+
+    assert retry.status_code == 202
+    assert incident_count(client) == 1

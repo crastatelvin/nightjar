@@ -59,7 +59,7 @@ recorded incidents, one per class, with chain verification green.
 | Credential-liveness verification | Real | `CredentialCheck`, `tests/test_github_revocation.py` |
 | Capability discovery | Real | `nightjarctl doctor`, `GET /v1/meta/capabilities` |
 | Fail-closed production defaults | Real | `Settings._refuse_unsafe_production` |
-| Multi-process safety | **Real for incidents and the scheduler** | `api/locks.py`, `tests/test_locks.py`; the intake replay guard is still per process |
+| Multi-process safety | **Real for incidents, the scheduler, and intake replay** | `api/locks.py`, `api/replay.py`, `tests/test_locks.py`, `tests/test_replay_store.py` |
 | Real-model evaluation | **Missing** | All numbers are mock |
 | OIDC / RBAC / rate limits | **Missing** | One shared token, self-asserted actor |
 
@@ -672,10 +672,13 @@ secret is configured rather than accepting anonymous incidents.
 
 Replay protection uses `X-Nightjar-Delivery`, falling back to the SHA-256 of the
 body when the sender provides none, so replaying a captured request is still
-rejected. The guard is per process; a shared store arrives with the Phase 7 locks.
-The incident's dedupe key defaults to `webhook:<delivery_id>`, so a sender retry
-that slips through a restarted guard returns the same case rather than a second
-one.
+rejected. **Shipped** as a shared store: `api/replay.py` claims a row in
+`intake_deliveries` with `INSERT ... ON CONFLICT DO NOTHING`, so the database
+decides the winner and a capture replayed at any replica gets `409`. A failed
+filing releases the claim so the sender's retry is not rejected; rows are pruned
+after twice the signature tolerance. The incident's dedupe key defaults to
+`webhook:<delivery_id>`, so a sender retry that slips through a restarted guard
+returns the same case rather than a second one.
 
 **Config.** `NIGHTJAR_NOTIFY_WEBHOOK_URL`, `NIGHTJAR_NOTIFY_WEBHOOK_SECRET`,
 `NIGHTJAR_INTAKE_WEBHOOK_SECRET`, `NIGHTJAR_INTAKE_WEBHOOK_TOLERANCE_SECONDS`,
@@ -1088,8 +1091,8 @@ Estimates are focused engineering hours, including tests and docs.
 
 Status: ✅ shipped in this phase. 6.16 is complete: outbound notifications are
 signed and inbound intake verifies the same scheme, rejects stale timestamps, and
-rejects replays. Both mail providers are shipped: Google Workspace (6.9) and
-Microsoft 365 (6.10).
+rejects replays across replicas through a shared store. Both mail providers are
+shipped: Google Workspace (6.9) and Microsoft 365 (6.10).
 
 | ID | Task | Files | Acceptance | Est |
 |---|---|---|---|---|
