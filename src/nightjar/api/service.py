@@ -31,6 +31,7 @@ from nightjar.api.repository import CaseFile, ConflictError, NotFoundError, Repo
 from nightjar.api.settings import Settings
 from nightjar.connectors.base import ToolResult
 from nightjar.connectors.errors import ConnectorError
+from nightjar.connectors.idempotency import action_key
 from nightjar.connectors.registry import ConnectorRegistry
 from nightjar.connectors.retry import call_with_retries
 from nightjar.core.actions import ActionValidationError, validate_plan
@@ -804,10 +805,30 @@ class IncidentService:
                 )
                 manual_actions.append(action)
                 continue
+            key = action_key(incident_id, plan.id, action)
+            replay = await self.repo.find_execution_by_key(key)
+            if replay is not None:
+                # This exact mutation already succeeded in this plan. A second
+                # approval decision or a retried worker must not do it again.
+                await self.repo.set_action_status(action.id, ActionStatus.EXECUTED)
+                await self.repo.append_event(
+                    incident_id,
+                    EventType.ACTION_REPLAYED,
+                    actor="executor",
+                    payload={
+                        "action_id": action.id,
+                        "action_type": action.action_type.value,
+                        "idempotency_key": key,
+                        "replay_of": replay.id,
+                        "result": replay.after_state,
+                    },
+                )
+                continue
             execution = await self.repo.record_execution_start(
                 incident_id,
                 action,
                 before_state={"action": action.action_type.value, "target": action.target},
+                idempotency_key=key,
             )
             await self.repo.set_action_status(action.id, ActionStatus.EXECUTING)
             await self.repo.append_event(

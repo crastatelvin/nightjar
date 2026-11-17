@@ -21,6 +21,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -191,6 +192,18 @@ class ExecutionRow(Base):
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Derived from (incident, plan, action, params). At most one *successful*
+    # execution may exist per key, enforced by a partial unique index: a failed
+    # attempt has to stay retryable.
+    idempotency_key: Mapped[str] = mapped_column(String(64), default="")
+    __table_args__ = (
+        Index(
+            "uq_executions_idempotency",
+            "idempotency_key",
+            unique=True,
+            postgresql_where=text("status = 'executed' AND idempotency_key <> ''"),
+        ),
+    )
 
 
 class VerificationRow(Base):

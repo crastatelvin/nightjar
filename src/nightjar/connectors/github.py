@@ -79,11 +79,21 @@ class GitHubConnector:
         if not self._token:
             raise ConnectorError("github issue creation requires NIGHTJAR_GITHUB_TOKEN")
         repository = str(action.params.get("repository") or action.target)
+        title = str(action.params.get("title") or "Nightjar incident")
+        existing = await self._find_open_issue(repository, title)
+        if existing is not None:
+            # A previous plan already opened this issue. Opening a second one
+            # gives the operator two tickets to close, so reuse the real one.
+            return {
+                "issue_url": existing.get("html_url"),
+                "number": existing.get("number"),
+                "reused": True,
+            }
         response = await self._request(
             "POST",
             f"/repos/{repository}/issues",
             json={
-                "title": action.params.get("title", "Nightjar incident"),
+                "title": title,
                 "body": action.params.get("body", ""),
                 "labels": action.params.get("labels", ["nightjar"]),
             },
@@ -93,7 +103,34 @@ class GitHubConnector:
                 f"github issue creation failed: {response.status_code} {response.text[:300]}"
             )
         body = response.json()
-        return {"issue_url": body.get("html_url"), "number": body.get("number")}
+        return {"issue_url": body.get("html_url"), "number": body.get("number"), "reused": False}
+
+    async def _find_open_issue(self, repository: str, title: str) -> dict[str, Any] | None:
+        """Look for an open issue with this exact title.
+
+        Best effort: if the read is refused, creation proceeds rather than failing
+        an incident because a listing was unavailable. The idempotency key already
+        prevents the same plan from executing twice; this covers a second plan.
+        """
+        response = await self._request(
+            "GET",
+            f"/repos/{repository}/issues",
+            params={"state": "open", "per_page": 50},
+        )
+        if response.status_code >= 400:
+            return None
+        try:
+            items = response.json()
+        except ValueError:
+            return None
+        if not isinstance(items, list):
+            return None
+        for item in items:
+            if not isinstance(item, dict) or item.get("pull_request"):
+                continue
+            if str(item.get("title", "")) == title:
+                return item
+        return None
 
     async def _revoke(self, action: ActionSpec) -> dict[str, Any]:
         ref = str(action.params.get("credential_ref", ""))

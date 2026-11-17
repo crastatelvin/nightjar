@@ -84,6 +84,7 @@ class EventType(StrEnum):
     ACTION_STARTED = "action.started"
     ACTION_COMPLETED = "action.completed"
     ACTION_FAILED = "action.failed"
+    ACTION_REPLAYED = "action.replayed"
     MANUAL_STEP_REQUIRED = "manual_step.required"
     MANUAL_STEP_ATTESTED = "manual_step.attested"
     VERIFICATION_COMPLETED = "verification.completed"

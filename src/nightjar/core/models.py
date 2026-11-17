@@ -215,6 +215,7 @@ class ActionExecution(StrictModel):
     error: str | None = None
     started_at: datetime | None = None
     finished_at: datetime | None = None
+    idempotency_key: str = ""
 
 
 class AgentRun(StrictModel):

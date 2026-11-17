@@ -23,6 +23,7 @@ import {
 
 function toneFor(type: string): "good" | "bad" | "info" | "wait" {
   if (type === "incident.resolved") return "good";
+  if (type === "action.replayed") return "good";
   if (type === "incident.reopened" || type === "action.failed") return "bad";
   if (type.startsWith("approval") || type === "policy.decided") return "wait";
   return "info";
@@ -36,6 +37,7 @@ function iconFor(type: string) {
   if (type.startsWith("plan")) return IconZap;
   if (type === "policy.decided") return IconLock;
   if (type.startsWith("approval")) return IconShield;
+  if (type === "action.replayed") return IconLink;
   if (type.startsWith("action")) return IconServer;
   if (type.startsWith("verification")) return IconCheck;
   if (type === "incident.reopened") return IconAlert;

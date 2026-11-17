@@ -211,6 +211,7 @@ def _execution(row: ExecutionRow) -> ActionExecution:
         error=row.error,
         started_at=ensure_utc(row.started_at) if row.started_at else None,
         finished_at=ensure_utc(row.finished_at) if row.finished_at else None,
+        idempotency_key=row.idempotency_key,
     )
 
 
@@ -640,7 +641,12 @@ class Repository:
             return _approval(row)
 
     async def record_execution_start(
-        self, incident_id: str, action: ActionSpec, before_state: dict[str, Any]
+        self,
+        incident_id: str,
+        action: ActionSpec,
+        before_state: dict[str, Any],
+        *,
+        idempotency_key: str = "",
     ) -> ActionExecution:
         async with self._session_factory() as session, session.begin():
             row = ExecutionRow(
@@ -650,6 +656,7 @@ class Repository:
                 status=ActionStatus.EXECUTING.value,
                 before_state=before_state,
                 started_at=utcnow(),
+                idempotency_key=idempotency_key,
             )
             session.add(row)
             await session.flush()
@@ -673,6 +680,22 @@ class Repository:
             row.finished_at = utcnow()
             await session.flush()
             return _execution(row)
+
+    async def find_execution_by_key(self, idempotency_key: str) -> ActionExecution | None:
+        """The one successful execution for this key, if the mutation already ran."""
+        if not idempotency_key:
+            return None
+        async with self._session_factory() as session:
+            row = await session.scalar(
+                select(ExecutionRow)
+                .where(
+                    ExecutionRow.idempotency_key == idempotency_key,
+                    ExecutionRow.status == ActionStatus.EXECUTED.value,
+                )
+                .order_by(ExecutionRow.finished_at.desc())
+                .limit(1)
+            )
+            return _execution(row) if row else None
 
     async def list_executions(self, incident_id: str) -> list[ActionExecution]:
         async with self._session_factory() as session:

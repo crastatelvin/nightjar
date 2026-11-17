@@ -199,15 +199,36 @@ def action_key(incident_id, plan_id, action) -> str:
     return sha256(f"{incident_id}|{plan_id}|{action.id}|{action.action_type}|{action.target}|{canonical}")
 ```
 
-- Stored in `action_executions.idempotency_key` with a unique index.
-- Before executing, `Repository.find_execution_by_key()` returns an existing
-  `EXECUTED` row → return `ActionResult(replay=True)` with the stored observation.
-- Before mutating, connectors with a read endpoint do a state check
-  (`purge_cache` is naturally idempotent; `open_issue` searches open issues by
-  title prefix; `block_sender` lists rules first; `rollback` reads current
-  deployment).
-- On timeout, the executor marks the action `UNKNOWN`, then a reconciliation pass
-  reads provider state. `UNKNOWN` never resolves an incident.
+**Shipped** (`src/nightjar/connectors/idempotency.py`). The key is derived from
+incident, plan, action id, action type, target, and canonicalised parameters, with
+the planner's optional pinned key folded in as extra material. Plan id is part of
+the key on purpose: a reopened incident gets a new plan and must be allowed to
+re-apply the fix, while a second execution of the *same* plan must not.
+
+`executions.idempotency_key` carries a **partial** unique index
+(`WHERE status = 'executed' AND idempotency_key <> ''`). Partial is the whole
+trick: a failed attempt has to stay retryable, so only one *successful* execution
+may exist per key. Rows without a key — manual steps, history — are excluded.
+
+Before executing, the service asks `Repository.find_execution_by_key()`. If a
+successful row exists, it sets the action to `executed`, appends an
+`action.replayed` event carrying the original execution id and result, and never
+calls the connector. The per-incident advisory lock makes the read-then-execute
+safe: the same key cannot be executed twice concurrently because the second
+worker cannot take the lock. The unique index is the backstop for a lock that
+expired mid-flight.
+
+Connectors also read before they write where the provider allows it. `open_issue`
+lists open issues and reuses one with the exact title (a refused listing proceeds
+to create rather than failing the incident, since the idempotency key already
+covers the same-plan case); Gmail sender blocking replays an existing filter;
+rollback paths read the current deployment before promoting anything;
+`purge_cache` is naturally idempotent.
+
+Not shipped: an `UNKNOWN` action state plus a reconciliation pass for a timeout
+whose outcome cannot be known. Today such an error is recorded as `failed` with
+`maybe_applied=true`, and `retry()` starts a fresh investigation with a new plan,
+which is honest but leaves the operator to confirm provider state by hand.
 
 ### 3.4 Rate limits
 
@@ -1171,7 +1192,7 @@ shipped: Google Workspace (6.9) and Microsoft 365 (6.10).
 |---|---|---|---|---|
 | 6.1 ✅ | Fail-closed `Settings` validator + production block in `.env.example` | `api/settings.py`, `.env.example`, `tests/test_settings.py` | production with lab/private/no-auth raises; dev unchanged | 4 |
 | 6.2 ◐ | Error taxonomy + `maybe_applied`; `ActionResult` deferred | `connectors/errors.py`, `connectors/*.py`, `tests/test_connector_errors.py` | every connector classifies status → typed error | 8 |
-| 6.3 | Idempotency table, key derivation, replay path | `api/tables.py`, `api/repository.py`, `connectors/idempotency.py`, migration | same action twice → one mutation; `replay=True` | 8 |
+| 6.3 ◐ | Derived idempotency key, partial unique index, replay path; `UNKNOWN` state open | `api/tables.py`, `api/repository.py`, `connectors/idempotency.py`, `alembic/...4b7e2c9d1a83` | same action twice → one mutation | 8 |
 | 6.4 ✅ | Per-provider token bucket + `Retry-After` retry loop | `connectors/ratelimit.py`, `connectors/retry.py`, `api/service.py`, tests | 429 waits exactly `Retry-After`; no burst over budget | 5 |
 | 6.5 ✅ | `SecretVault`, `CredentialRef`, redaction registry | `core/secrets.py`, `core/redaction.py`, tests | raw secret absent from DB/log/evidence | 8 |
 | 6.6 ✅ | `nightjarctl doctor` + `GET /v1/meta/capabilities` | `cli/doctor.py`, `api/routers/meta.py`, `pyproject.toml`, tests | table renders; exit 0 only when all required ok | 10 |

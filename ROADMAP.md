@@ -170,6 +170,8 @@ exists. What remains in this phase is hardening, not reach.
 ### Phase 7 — Multi-process and identity
 
 - Postgres advisory locks for per-incident work; scheduler leader election. ✅
+- Derived idempotency keys and a replay path, so a duplicated approval decision or
+  retried worker cannot mutate a provider twice. ✅
 - A shared intake replay store, so a captured delivery replayed at a second
   replica is rejected. ✅
 - OIDC authentication with a JWKS cache and asymmetric-only algorithms; the actor

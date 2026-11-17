@@ -138,6 +138,27 @@ That is a documented limit, not a silent one: N replicas mean N times the table.
 The lab, plain HTTP probes, and the outbound webhook do not use a bucket, because
 they are not provider APIs with a published budget.
 
+### Idempotency (`connectors/idempotency.py`)
+
+Every automated action gets a derived key over incident, plan, action, target, and
+canonical parameters. The plan id is in the key because a reopened incident gets a
+new plan and must be allowed to act again, while a second execution of the same
+plan must not. Before calling a connector, the executor asks the repository for a
+successful execution with that key; if one exists it marks the action `executed`,
+appends `action.replayed` with the original execution id and result, and does not
+call the provider.
+
+The database enforces the same rule with a *partial* unique index on
+`executions.idempotency_key` filtered to `status = 'executed'`, so a failed
+attempt stays retryable but a second success is impossible. The per-incident
+advisory lock makes the read-then-execute sequence safe within a replica and
+across replicas; the index is the backstop for a lock that expired mid-flight.
+
+Where a provider exposes a read endpoint, the connector also checks state first:
+`open_issue` reuses an open issue with the same title, Gmail sender blocking
+replays an existing filter, and rollback paths read the live deployment before
+promoting anything.
+
 The Google Workspace connector uses a service account with domain-wide
 delegation and impersonates one managed mailbox per request, so Nightjar never
 holds a user password or refresh token. Quarantine is a label plus removal from
