@@ -50,6 +50,7 @@ class IncidentRow(Base):
     status: Mapped[str] = mapped_column(String(30), default="intake", index=True)
     source: Mapped[str] = mapped_column(String(20), default="api")
     dedupe_key: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    reported_by: Mapped[str] = mapped_column(String(100), default="")
     summary: Mapped[str | None] = mapped_column(Text, nullable=True)
     root_cause: Mapped[str | None] = mapped_column(Text, nullable=True)
     confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
@@ -173,6 +174,7 @@ class ApprovalRow(Base):
     approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     comment: Mapped[str] = mapped_column(Text, default="")
     token_hash: Mapped[str] = mapped_column(String(64), default="")
+    requested_by: Mapped[str] = mapped_column(String(100), default="")
 
 
 class ExecutionRow(Base):

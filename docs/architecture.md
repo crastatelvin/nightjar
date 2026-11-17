@@ -151,6 +151,27 @@ case file, timeline, SSE stream, chain verification, notes, retry,
 verify-now, approvals, manual steps, and meta. `IncidentService` is the single
 orchestrator used by both the inline pipeline and Temporal activities.
 
+Authentication has two shapes, and `src/nightjar/api/auth.py` exists to keep them
+from blurring. A shared `NIGHTJAR_API_TOKEN` is one credential for the whole
+deployment, so `x-nightjar-actor` is an audit label rather than an authorization
+decision. OIDC verifies a JWT against the issuer's discovery document and JWKS,
+with an asymmetric-only algorithm allowlist (accepting HS256 would let a caller
+sign its own token with the published key set), issuer and audience checks, a
+one-refetch key-rotation path, and a scheme check on `jwks_uri` so a discovery
+document cannot downgrade key fetching to plaintext. With OIDC the actor comes
+from the verified token and the header is ignored: a caller who has an identity
+must not be able to claim to be someone else. An issuer configured without an
+audience is refused at startup in every environment, because an audience-less
+verifier accepts a token minted for any other application on the same issuer.
+
+Approval records store `requested_by` (the incident reporter) and `approved_by`.
+When `NIGHTJAR_REQUIRE_SEPARATION_OF_DUTIES` is on, `decide_approval` raises
+`Forbidden` before taking the incident lock when the two match, so the refusal
+executes nothing and leaves no partial state. The flag is off by default because
+the target deployment is often a single operator, and a rule that locks the only
+operator out of their own incident would be turned off immediately — worse than
+not having it.
+
 Alert intake is the one mutating route that does not take a bearer token. It is
 authenticated by an HMAC-SHA256 over `"<timestamp>.<body>"`, compared in constant
 time, with a 300 s timestamp window, a body cap, and a delivery-id replay guard.

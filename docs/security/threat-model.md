@@ -79,15 +79,23 @@ the stability window exists.
 
 ### 3. A malicious or careless operator
 
-**Controls:** bearer token auth, actor recorded on approvals and notes, expiring
-approval windows, R3 break-glass requires two approvals, append-only hash-chained
-ledger, and no arbitrary shell.
+**Controls:** bearer token auth, optional OIDC with issuer, audience, expiry, and
+signature verification, actor recorded on approvals and notes, opt-in separation of
+duties, expiring approval windows, R3 break-glass requires two approvals,
+append-only hash-chained ledger, and no arbitrary shell.
 
-**Residual risk:** Nightjar is currently single-tenant and has one shared token.
-The `x-nightjar-actor` header is self-asserted, not cryptographically bound to an
-identity. Anyone holding the token can act as any actor name. Deploy behind an
-authenticating proxy or add SSO before multi-operator use. This is documented as a
-known limitation, not a solved problem.
+With OIDC the actor is the verified `email` (or `preferred_username`, then `sub`) and
+`x-nightjar-actor` is ignored, so a caller cannot claim to be someone else. With the
+shared token that is not true, and the documentation says so rather than implying a
+control that does not exist.
+
+**Residual risk:** Nightjar is single-tenant. With a shared token, the
+`x-nightjar-actor` header is self-asserted and anyone holding the token can act as
+any actor name; use OIDC before multi-operator use. Separation of duties is off by
+default so a lone operator is not locked out of their own incident, which means a
+deployment that leaves it off has no two-person control on R2 actions. Group-to-role
+mapping and rate limiting are not implemented, so an authenticated caller is
+authorized for every route regardless of group membership.
 
 ### 4. A compromised Nightjar host
 
@@ -169,6 +177,11 @@ before anything changes.
 7. Probes cannot reach private address space unless explicitly enabled.
 8. Inbound intake is disabled without a secret, and every accepted delivery is
    signed, fresh, and seen once.
+9. A credential is either a shared token or a verified JWT; an issuer configured
+   without an audience, or an algorithm outside the asymmetric allowlist, is
+   refused rather than trusted.
+10. With separation of duties enabled, the reporter of an incident cannot approve
+    its remediation, and the refusal executes nothing.
 
 See [checklist.md](checklist.md) for the deployment checklist and
 [../architecture.md](../architecture.md) for component detail.

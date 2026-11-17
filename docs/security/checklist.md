@@ -6,14 +6,20 @@ Use this before exposing a Nightjar deployment to a real organization. Items mar
 
 ## Identity and access
 
-- [ ] **Required** Set `NIGHTJAR_API_TOKEN` to a long random value. An empty token
-      disables authentication.
+- [ ] **Required** Configure a credential: either `NIGHTJAR_API_TOKEN` (long and
+      random) or OIDC (`NIGHTJAR_OIDC_ISSUER` plus `NIGHTJAR_OIDC_AUDIENCE`). With
+      neither, the API is open, which production refuses at startup.
+- [ ] If more than one person has access, use OIDC rather than the shared token.
+      With OIDC the actor is the verified token identity and `x-nightjar-actor` is
+      ignored; with the shared token it is only an audit label.
+- [ ] Set `NIGHTJAR_REQUIRE_SEPARATION_OF_DUTIES=true` once more than one operator
+      exists, so the person who filed an incident cannot approve its R2 actions.
 - [ ] Put Nightjar behind an authenticating reverse proxy (SSO, mTLS, or a VPN).
-      The API token is a single shared secret, not per-user identity.
-- [ ] Restrict who can reach the API and the UI. Do not bind to `0.0.0.0` on a
+      Restrict who can reach the API and the UI; do not bind to `0.0.0.0` on a
       public interface.
-- [ ] Treat `x-nightjar-actor` as advisory. Names are self-asserted; the proxy
-      should inject and strip it if actor identity matters.
+- [ ] Treat `x-nightjar-actor` as advisory unless OIDC is configured. Names are
+      self-asserted under the shared token; the proxy should inject and strip it if
+      actor identity matters.
 - [ ] Turn on provider-side audit logging for every token Nightjar holds.
 
 ## Alert intake

@@ -822,12 +822,42 @@ New rule: R2 actions require `action.rollback` to be non-empty, except
 For that exception the policy requires a `notify` action in the same plan so a
 human knows a credential was killed.
 
-### 7.4 Separation of duties
+### 7.3 ✅ OIDC JWT auth + JWKS cache
 
-`NIGHTJAR_REQUIRE_SEPARATION_OF_DUTIES=true` (production default): the actor who
-filed or approved the incident cannot approve its R2 actions. The approval record
-stores `requested_by` and `approved_by`; policy denies `approved_by ==
-requested_by`. Break-glass remains denied in v1.
+`src/nightjar/api/auth.py`. Discovery and JWKS are cached for an hour and an
+unknown `kid` triggers exactly one refetch, so a rotation does not lock everyone
+out. The algorithm allowlist is asymmetric-only (`RS256/384/512`, `ES256/384`):
+accepting `HS256` would let a caller sign its own token with the published key
+set. Issuer, audience, expiry, and required `sub` are checked before any claim is
+read, and `jwks_uri` must use the issuer's scheme so a discovery document cannot
+downgrade key fetching to plaintext.
+
+With OIDC the recorded actor is the verified `email` (falling back to
+`preferred_username`, then `sub`) and `x-nightjar-actor` is ignored. With the
+shared token there is no per-user identity, so the header remains the audit label
+and the documentation says so. `NIGHTJAR_OIDC_ISSUER` without
+`NIGHTJAR_OIDC_AUDIENCE` is refused at startup in every environment, because an
+audience-less verifier accepts a token minted for any other application on the
+same issuer.
+
+### 7.4 ✅ Separation of duties
+
+`NIGHTJAR_REQUIRE_SEPARATION_OF_DUTIES` (default **false**). The incident stores
+`reported_by` and the approval stores `requested_by`; when the flag is on,
+`decide_approval` raises `Forbidden` before taking the incident lock if the caller
+is the reporter, which returns `403` and executes nothing.
+
+The default is false on purpose. The target deployment is a small organization
+where one person may be the whole operations team; a two-person rule would lock
+the only operator out of their own incident, and a control that has to be disabled
+to work is worse than one that is honestly optional. The refusal is covered by
+`tests/test_separation_of_duties.py`, including the single-operator case and a
+webhook-filed incident where the reporter is `alert:webhook` and any human may
+approve.
+
+Group-to-role mapping (7.4's original scope) is **not** shipped: groups are parsed
+from the token and exposed on `Identity`, but every authenticated caller is
+authorized for every route. Break-glass remains denied in v1.
 
 ---
 
@@ -860,8 +890,8 @@ real gate, not a label.
 |---|---|
 | `NIGHTJAR_ENVIRONMENT` | `development` / `test` / `production` |
 | `NIGHTJAR_MANAGED_TARGETS` | JSON allowlist |
-| `NIGHTJAR_OIDC_ISSUER`, `_AUDIENCE`, `_GROUPS_CLAIM` | OIDC auth |
-| `NIGHTJAR_REQUIRE_SEPARATION_OF_DUTIES` | approval policy |
+| `NIGHTJAR_OIDC_ISSUER`, `_AUDIENCE`, `_GROUPS_CLAIM` | OIDC auth; audience is mandatory when the issuer is set |
+| `NIGHTJAR_REQUIRE_SEPARATION_OF_DUTIES` | reporter cannot approve their own R2 action (default false) |
 | `NIGHTJAR_GITHUB_APP_ID`, `_APP_PRIVATE_KEY`, `_INSTALLATION_ID`, `_ORG` | org PAT revocation |
 | `NIGHTJAR_STRIPE_SECRET_KEY` | read-only revocation probe |
 | `NIGHTJAR_GOOGLE_SERVICE_ACCOUNT_JSON`, `_IMPERSONATE`, `_WORKSPACE_DOMAINS` | Workspace |
@@ -1125,8 +1155,8 @@ shipped: Google Workspace (6.9) and Microsoft 365 (6.10).
 |---|---|---|---|---|
 | 7.1 | Postgres advisory lock helper | `api/locks.py`, tests | lock survives commit; busy → 409 | 6 |
 | 7.2 | Scheduler leader election | `api/main.py`, `api/locks.py`, tests | two processes, one runs checks | 4 |
-| 7.3 | OIDC JWT auth + JWKS cache | `api/auth.py`, `api/deps.py`, tests | valid token → subject; expired → 401 | 12 |
-| 7.4 | Role mapping + separation of duties | `api/auth.py`, `core/policy.py`, tests | same actor cannot approve own R2 | 6 |
+| 7.3 ✅ | OIDC JWT auth + JWKS cache | `api/auth.py`, `api/deps.py`, `tests/test_auth.py` | valid token → subject; expired/forged → 403 | 12 |
+| 7.4 ◐ | Separation of duties shipped; group-to-role mapping open | `api/auth.py`, `api/service.py`, `tests/test_separation_of_duties.py` | reporter cannot approve own R2 | 6 |
 | 7.5 | Rate limiting + body caps + request IDs | `api/middleware.py`, tests | 429 after budget; 413 over cap | 8 |
 | 7.6 | SSE via `LISTEN/NOTIFY` with poll fallback | `api/repository.py`, `api/routers/incidents.py`, tests | p95 < 150 ms | 8 |
 

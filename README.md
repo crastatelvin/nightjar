@@ -334,11 +334,17 @@ Not yet real:
   remaining work order;
 - no evaluation has been recorded against a hosted model, so model quality, cost, and
   latency numbers are mock-only;
-- one shared bearer token and a self-asserted actor; no per-user identity, RBAC, or rate
-  limiting;
+- authentication is either one shared bearer token, where `x-nightjar-actor` is an
+  audit label, or OIDC with a verified issuer, audience, and key set, where the actor
+  comes from the token and the header is ignored; group-to-role mapping and rate
+  limiting are not implemented;
+- separation of duties is opt-in (`NIGHTJAR_REQUIRE_SEPARATION_OF_DUTIES`), because a
+  one-person operations team is the target deployment; with it on, the person who
+  filed the incident cannot approve its remediation;
 - replicas are safe for incident work, the stability scheduler, and alert-intake
   replay through PostgreSQL advisory locks and a shared `intake_deliveries` table;
-  what is still missing for horizontal scale is per-user identity and rate limiting.
+  what is still missing for horizontal scale is group-to-role mapping and rate
+  limiting.
 
 Production is fail-closed at startup: with `NIGHTJAR_ENVIRONMENT=production` the process
 refuses to boot with the lab connector on, private probes allowed, no bearer token or

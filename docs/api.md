@@ -2,11 +2,34 @@
 
 Base URL: `http://127.0.0.1:8000`
 
-All `/v1` endpoints require `Authorization: Bearer <NIGHTJAR_API_TOKEN>`, except
-the signed alert intake (`POST /v1/intake/webhook`), which is authenticated by an
-HMAC signature instead. Health endpoints are unauthenticated so orchestrators can
-probe them. Errors use `{"detail": "..."}` with `400`, `401`, `404`, `409`, `413`,
+All `/v1` endpoints require `Authorization: Bearer <credential>`, except the
+signed alert intake (`POST /v1/intake/webhook`), which is authenticated by an HMAC
+signature instead. Health endpoints are unauthenticated so orchestrators can probe
+them. Errors use `{"detail": "..."}` with `400`, `401`, `403`, `404`, `409`, `413`,
 `422`, or `503` as appropriate.
+
+Two credential styles are supported and they promise different things:
+
+- **Shared token** (`NIGHTJAR_API_TOKEN`). One secret for the deployment.
+  `x-nightjar-actor` names whoever the client says is acting; it is an audit label,
+  not an authorization decision, because everyone holding the token is equally
+  trusted.
+- **OIDC** (`NIGHTJAR_OIDC_ISSUER` + `NIGHTJAR_OIDC_AUDIENCE`). The token is a JWT
+  verified against the issuer's discovery document and JWKS: algorithm allowlist,
+  issuer, audience, expiry, and signature are all checked before any claim is read.
+  The recorded actor is the token's `email` (falling back to `preferred_username`,
+  then `sub`), and `x-nightjar-actor` is ignored so a caller with a real identity
+  cannot claim to be someone else. `NIGHTJAR_OIDC_GROUPS_CLAIM` (default `groups`)
+  names the claim holding group membership; group-to-role mapping is not
+  implemented yet.
+
+A missing credential is `401` with `WWW-Authenticate: Bearer`; a credential that was
+presented and refused is `403`. With no credential configured the API is open, which
+is development-only and refused in production.
+
+When `NIGHTJAR_REQUIRE_SEPARATION_OF_DUTIES=true`, approving an R2 action as the
+person who filed the incident returns `403` and executes nothing. The default is
+`false` because a one-person operations team is the target deployment.
 
 ## Health
 
@@ -134,6 +157,10 @@ the pipeline until it needs approval or reaches a terminal state.
 Returns `201` with the incident. `dedupe_key` returns the existing incident
 when the key is reused.
 
+The response carries `reported_by`: the verified OIDC identity when OIDC is
+configured, otherwise the `x-nightjar-actor` header (default `operator`). That
+value is what separation of duties compares against the approver.
+
 ### `GET /v1/incidents`
 
 Query: `status`, `limit` (default 50), `offset`.
@@ -244,7 +271,8 @@ Attestation is evidence, not authority: it never resolves an incident by itself.
 ### `GET /v1/incidents/{id}/approvals`
 
 Lists approval requests with status `pending`, `approved`, `rejected`, or
-`expired`.
+`expired`. Each record carries `requested_by` (the incident reporter) and, once
+decided, `approved_by`, so the two-person control is visible in the case file.
 
 ### `POST /v1/incidents/{id}/approvals/{approval_id}`
 
@@ -255,6 +283,7 @@ Header `x-nightjar-actor: alice`.
 ```
 
 - `200` — decision recorded; returns the case file.
+- `403` — separation of duties is on and the caller filed the incident.
 - `409` — approval already decided or expired.
 
 Approving the last pending approval executes the plan. Rejecting any pending
@@ -265,7 +294,11 @@ incident. Nothing executes on rejection.
 
 | Variable | Purpose |
 | --- | --- |
-| `NIGHTJAR_API_TOKEN` | Bearer token required by `/v1` |
+| `NIGHTJAR_API_TOKEN` | Shared bearer token required by `/v1` |
+| `NIGHTJAR_OIDC_ISSUER` | Verify JWTs from this issuer instead of a shared token |
+| `NIGHTJAR_OIDC_AUDIENCE` | Required audience; an issuer without one is refused at startup |
+| `NIGHTJAR_OIDC_GROUPS_CLAIM` | Claim holding group membership (default `groups`) |
+| `NIGHTJAR_REQUIRE_SEPARATION_OF_DUTIES` | Reporter cannot approve their own R2 action (default false) |
 | `NIGHTJAR_CORS_ORIGINS` | Comma-separated browser origins |
 | `NIGHTJAR_ORCHESTRATOR` | `inline` (default) or `temporal` |
 | `NIGHTJAR_STABILITY_SECONDS` | Stability window after T+0 |

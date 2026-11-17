@@ -172,8 +172,11 @@ exists. What remains in this phase is hardening, not reach.
 - Postgres advisory locks for per-incident work; scheduler leader election. ✅
 - A shared intake replay store, so a captured delivery replayed at a second
   replica is rejected. ✅
-- OIDC authentication, role mapping, separation of duties for approvals, rate
-  limits, request size caps, and request IDs.
+- OIDC authentication with a JWKS cache and asymmetric-only algorithms; the actor
+  is the verified token identity, not a header. ✅
+- Separation of duties for approvals, opt-in so a lone operator is not locked out
+  of their own incident. ✅
+- Group-to-role mapping, rate limits, request size caps, and request IDs.
 - SSE over `LISTEN/NOTIFY` with the poll as fallback.
 
 ### Phase 8 — Evidence for skeptics

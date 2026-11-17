@@ -109,6 +109,7 @@ async def _load_case(service: IncidentService, incident_id: str) -> schemas.Case
 async def create_incident(
     payload: schemas.IncidentCreate,
     service: Annotated[IncidentService, Depends(get_service)],
+    reported_by: Annotated[str, Depends(actor)],
     wait: bool = Query(default=False, description="Run the pipeline before responding"),
 ) -> Incident:
     incident = await service.intake(
@@ -119,6 +120,7 @@ async def create_incident(
         source=payload.source,
         metadata=payload.metadata,
         dedupe_key=payload.dedupe_key,
+        reported_by=reported_by,
         wait=wait,
     )
     return Incident.model_validate(incident.model_dump())

@@ -38,6 +38,7 @@ class Incident(StrictModel):
     status: IncidentStatus = IncidentStatus.INTAKE
     source: IncidentSource = IncidentSource.API
     dedupe_key: str | None = None
+    reported_by: str = ""
     summary: str | None = None
     root_cause: str | None = None
     confidence: float | None = Field(default=None, ge=0.0, le=1.0)
@@ -168,6 +169,7 @@ class ApprovalRequest(StrictModel):
     approved_at: datetime | None = None
     comment: str = ""
     token_hash: str = ""
+    requested_by: str = ""
 
 
 class VerificationResult(StrictModel):

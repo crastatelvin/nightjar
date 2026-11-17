@@ -14,11 +14,12 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 from nightjar import __version__
 from nightjar.agents.runtime import build_runtime
 from nightjar.api import db
+from nightjar.api.auth import OIDCVerifier
 from nightjar.api.locks import LockBusy, scheduler_leader
 from nightjar.api.replay import PostgresReplayStore
 from nightjar.api.repository import ConflictError, NotFoundError, Repository
 from nightjar.api.routers import approvals, health, incidents, intake, meta
-from nightjar.api.service import IncidentService
+from nightjar.api.service import Forbidden, IncidentService
 from nightjar.api.settings import Settings, get_settings
 from nightjar.connectors.registry import build_registry
 from nightjar.core.actions import ActionValidationError
@@ -85,6 +86,15 @@ def create_app(
     )
     api.state.settings = resolved
     api.state.service = service
+    api.state.oidc = (
+        OIDCVerifier(
+            issuer=resolved.oidc_issuer,
+            audience=resolved.oidc_audience,
+            groups_claim=resolved.oidc_groups_claim,
+        )
+        if resolved.oidc_issuer and resolved.oidc_audience
+        else None
+    )
     api.state.intake_replay = PostgresReplayStore(
         db.get_session_factory,
         tenant_id=resolved.tenant_id,
@@ -110,6 +120,10 @@ def create_app(
     @api.exception_handler(ActionValidationError)
     async def invalid_action(request: Request, exc: ActionValidationError) -> JSONResponse:
         return JSONResponse(status_code=422, content={"detail": str(exc)})
+
+    @api.exception_handler(Forbidden)
+    async def forbidden(request: Request, exc: Forbidden) -> JSONResponse:
+        return JSONResponse(status_code=403, content={"detail": str(exc)})
 
     @api.exception_handler(LockBusy)
     async def lock_busy(request: Request, exc: LockBusy) -> JSONResponse:

@@ -167,6 +167,11 @@ class Settings(BaseSettings):
                 "Microsoft 365 needs NIGHTJAR_MICROSOFT_TENANT_ID, "
                 "NIGHTJAR_MICROSOFT_CLIENT_ID, and NIGHTJAR_MICROSOFT_CLIENT_SECRET together"
             )
+        if self.oidc_issuer and not self.oidc_audience:
+            # An issuer with no audience check accepts a token minted for any other
+            # application on the same issuer, and one with no verifier accepts
+            # everything. Refuse the configuration in every environment.
+            raise ValueError("NIGHTJAR_OIDC_AUDIENCE is required when NIGHTJAR_OIDC_ISSUER is set")
         if self.environment != "production":
             return self
         problems: list[str] = []

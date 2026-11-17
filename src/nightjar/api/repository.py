@@ -98,6 +98,7 @@ def _incident(row: IncidentRow) -> Incident:
         status=IncidentStatus(row.status),
         source=IncidentSource(row.source),
         dedupe_key=row.dedupe_key,
+        reported_by=row.reported_by,
         summary=row.summary,
         root_cause=row.root_cause,
         confidence=row.confidence,
@@ -179,6 +180,7 @@ def _approval(row: ApprovalRow) -> ApprovalRequest:
         approved_at=ensure_utc(row.approved_at) if row.approved_at else None,
         comment=row.comment,
         token_hash=row.token_hash,
+        requested_by=row.requested_by,
     )
 
 
@@ -259,6 +261,7 @@ class Repository:
                 status=incident.status.value,
                 source=incident.source.value,
                 dedupe_key=incident.dedupe_key,
+                reported_by=incident.reported_by,
                 summary=incident.summary,
                 root_cause=incident.root_cause,
                 confidence=incident.confidence,
@@ -572,7 +575,7 @@ class Repository:
             row.updated_at = utcnow()
 
     async def create_approval(
-        self, incident_id: str, action_id: str, ttl_seconds: int
+        self, incident_id: str, action_id: str, ttl_seconds: int, *, requested_by: str = ""
     ) -> ApprovalRequest:
         now = utcnow()
         async with self._session_factory() as session, session.begin():
@@ -586,6 +589,7 @@ class Repository:
                 status=ApprovalStatus.PENDING.value,
                 requested_at=now,
                 expires_at=now + timedelta(seconds=ttl_seconds),
+                requested_by=requested_by[:100],
             )
             session.add(row)
             await session.flush()

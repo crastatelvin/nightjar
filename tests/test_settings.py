@@ -34,8 +34,19 @@ def test_production_accepts_a_complete_configuration() -> None:
 
 
 def test_production_accepts_oidc_instead_of_a_static_token() -> None:
-    settings = _production(api_token=None, oidc_issuer="https://id.example.com")
+    settings = _production(
+        api_token=None,
+        oidc_issuer="https://id.example.com",
+        oidc_audience="nightjar",
+    )
     assert settings.oidc_issuer == "https://id.example.com"
+
+
+def test_an_issuer_without_an_audience_is_refused() -> None:
+    """An issuer with no audience check accepts tokens minted for other apps."""
+    with pytest.raises(ValidationError) as excinfo:
+        Settings(_env_file=None, oidc_issuer="https://id.example.com")
+    assert "NIGHTJAR_OIDC_AUDIENCE" in str(excinfo.value)
 
 
 @pytest.mark.parametrize(

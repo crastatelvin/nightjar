@@ -150,6 +150,7 @@ async def intake_webhook(
             incident_class=payload.incident_class,
             severity=payload.severity,
             source=IncidentSource.WEBHOOK,
+            reported_by="alert:webhook",
             metadata=payload.metadata,
             dedupe_key=payload.dedupe_key or f"webhook:{delivery_id}",
         )

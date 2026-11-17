@@ -77,6 +77,10 @@ class BudgetExceeded(ServiceError):
     pass
 
 
+class Forbidden(ServiceError):
+    """Authenticated, but not allowed to perform this particular action."""
+
+
 def _jsonable(value: Any) -> Any:
     if hasattr(value, "model_dump"):
         return value.model_dump(mode="json")
@@ -137,6 +141,7 @@ class IncidentService:
         source: IncidentSource = IncidentSource.API,
         metadata: dict[str, Any] | None = None,
         dedupe_key: str | None = None,
+        reported_by: str = "",
         wait: bool = False,
     ) -> Incident:
         incident, _ = await self.intake_event(
@@ -147,6 +152,7 @@ class IncidentService:
             source=source,
             metadata=metadata,
             dedupe_key=dedupe_key,
+            reported_by=reported_by,
             wait=wait,
         )
         return incident
@@ -161,6 +167,7 @@ class IncidentService:
         source: IncidentSource = IncidentSource.API,
         metadata: dict[str, Any] | None = None,
         dedupe_key: str | None = None,
+        reported_by: str = "",
         wait: bool = False,
     ) -> tuple[Incident, bool]:
         """File an incident, returning it and whether it was newly created.
@@ -179,6 +186,7 @@ class IncidentService:
             status=IncidentStatus.INTAKE,
             source=source,
             dedupe_key=dedupe_key,
+            reported_by=reported_by.strip()[:100],
             metadata=safe_meta,
         )
         stored, created = await self.repo.create_incident(incident)
@@ -686,7 +694,10 @@ class IncidentService:
                 denied.append((action, decision))
             elif decision.decision is Decision.REQUIRE_APPROVAL:
                 approval = await self.repo.create_approval(
-                    incident.id, action.id, self.settings.approval_ttl_seconds
+                    incident.id,
+                    action.id,
+                    self.settings.approval_ttl_seconds,
+                    requested_by=incident.reported_by or "system",
                 )
                 await self.repo.set_action_status(action.id, ActionStatus.AWAITING_APPROVAL)
                 approvals.append((action, approval))
@@ -862,6 +873,17 @@ class IncidentService:
         comment: str = "",
     ) -> CaseFile:
         approval = await self.repo.get_approval(approval_id)
+        if (
+            self.settings.require_separation_of_duties
+            and approval.requested_by
+            and actor == approval.requested_by
+        ):
+            # One person filing an incident and then approving its own R2 action is
+            # the control failure separation of duties exists to prevent.
+            raise Forbidden(
+                f"{actor} filed this incident and cannot approve its remediation; "
+                "a second operator must decide"
+            )
         async with self._lock(approval.incident_id):
             decided = await self.repo.decide_approval(
                 approval_id, approved=approved, actor=actor, comment=comment
@@ -879,6 +901,8 @@ class IncidentService:
                     "action_id": decided.action_id,
                     "status": decided.status.value,
                     "comment": comment,
+                    "requested_by": approval.requested_by,
+                    "separation_of_duties": self.settings.require_separation_of_duties,
                 },
             )
             incident = await self.repo.get_incident(approval.incident_id)
@@ -1157,4 +1181,4 @@ class IncidentService:
         return await self.repo.get_incident(incident_id)
 
 
-__all__ = ["BudgetExceeded", "IncidentService", "NotFoundError", "ServiceError"]
+__all__ = ["BudgetExceeded", "Forbidden", "IncidentService", "NotFoundError", "ServiceError"]
