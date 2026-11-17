@@ -12,6 +12,15 @@ from nightjar.connectors.base import (
     ConnectorError,
     ToolResult,
 )
+from nightjar.connectors.errors import (
+    NotFound,
+    PermissionDenied,
+    RateLimited,
+    error_from_response,
+    retry_after_seconds,
+    transport_error,
+)
+from nightjar.connectors.ratelimit import limiter_for
 from nightjar.core.enums import ActionType, EvidenceKind
 from nightjar.core.models import ActionSpec, VerificationPredicate
 from nightjar.core.verification import VerificationError
@@ -75,6 +84,7 @@ class RenderConnector:
         params: dict[str, Any] | None = None,
         json: dict[str, Any] | None = None,
     ) -> httpx.Response:
+        await limiter_for(self.name).acquire()
         try:
             async with httpx.AsyncClient(timeout=self._timeout) as client:
                 return await client.request(
@@ -85,27 +95,34 @@ class RenderConnector:
                     json=json,
                 )
         except httpx.HTTPError as exc:
-            raise ConnectorError(f"render unavailable: {exc}", retryable=True) from exc
+            raise transport_error(self.name, exc, f"{method} {path}") from exc
 
-    @staticmethod
-    def _unwrap(response: httpx.Response, what: str) -> Any:
-        if response.status_code in {401, 403}:
-            raise ConnectorError(
-                f"render refused {what} ({response.status_code}): the API key is invalid "
-                "or lacks the required scope"
+    def _unwrap(self, response: httpx.Response, what: str) -> Any:
+        if response.status_code == 401:
+            raise PermissionDenied(
+                f"render refused {what} (401): the API key is invalid",
+                status=401,
+                provider=self.name,
+            )
+        if response.status_code == 403:
+            raise PermissionDenied(
+                f"render refused {what} (403): the API key is invalid or lacks the required scope",
+                status=403,
+                provider=self.name,
             )
         if response.status_code == 404:
-            raise ConnectorError(f"render {what}: not found (404)")
+            raise NotFound(f"render {what}: not found (404)", status=404, provider=self.name)
         if response.status_code == 429:
-            retry_after = response.headers.get("retry-after", "1")
-            raise ConnectorError(
-                f"render rate limit reached for {what}; retry after {retry_after}s",
-                retryable=True,
+            wait = retry_after_seconds(response)
+            raise RateLimited(
+                f"render rate limit reached for {what}; retry after "
+                f"{wait if wait is not None else 1:g}s",
+                retry_after=wait if wait is not None else 1.0,
+                status=429,
+                provider=self.name,
             )
         if response.status_code >= 400:
-            raise ConnectorError(
-                f"render {what} failed: {response.status_code} {response.text[:300]}"
-            )
+            raise error_from_response(self.name, response, what)
         return response.json() if response.content else {}
 
     async def _service_detail(self, service: str) -> dict[str, Any]:

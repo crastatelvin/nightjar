@@ -6,6 +6,14 @@ from typing import Any
 import httpx
 
 from nightjar.connectors.base import Capability, CapabilityReport, ConnectorError, ToolResult
+from nightjar.connectors.errors import (
+    PermissionDenied,
+    RateLimited,
+    error_from_response,
+    retry_after_seconds,
+    transport_error,
+)
+from nightjar.connectors.ratelimit import limiter_for
 from nightjar.core.enums import ActionType, EvidenceKind
 from nightjar.core.models import ActionSpec, VerificationPredicate
 from nightjar.core.secrets import (
@@ -54,13 +62,14 @@ class GitHubConnector:
         }
 
     async def _request(self, method: str, path: str, **kwargs: Any) -> httpx.Response:
+        await limiter_for(self.name).acquire()
         try:
             async with httpx.AsyncClient(timeout=15.0) as client:
                 return await client.request(
                     method, f"{self._base}{path}", headers=self._headers(), **kwargs
                 )
         except httpx.HTTPError as exc:
-            raise ConnectorError(f"github unavailable: {exc}", retryable=True) from exc
+            raise transport_error(self.name, exc, f"{method} {path}") from exc
 
     async def execute(self, action: ActionSpec) -> dict[str, Any]:
         if action.action_type is ActionType.REVOKE_CREDENTIAL:
@@ -119,24 +128,25 @@ class GitHubConnector:
                     json={"credentials": [raw]},
                 )
         except httpx.HTTPError as exc:
-            raise ConnectorError(
-                f"github revocation request failed: {exc}", retryable=True
-            ) from exc
+            raise transport_error(self.name, exc, "credential revocation") from exc
 
         if response.status_code == 429:
-            raise ConnectorError(
+            wait = retry_after_seconds(response)
+            raise RateLimited(
                 "github revocation rate limit reached (60 unauthenticated requests/hour)",
-                retryable=True,
+                retry_after=wait,
+                status=429,
+                provider=self.name,
             )
         if response.status_code == 403:
-            raise ConnectorError(
+            raise PermissionDenied(
                 "github revocation rejected the request as authenticated; "
-                "this endpoint must be called without a token"
+                "this endpoint must be called without a token",
+                status=403,
+                provider=self.name,
             )
         if response.status_code != 202:
-            raise ConnectorError(
-                f"github revocation failed: {response.status_code} {response.text[:200]}"
-            )
+            raise error_from_response(self.name, response, "credential revocation")
 
         # 202 only means "queued". Never claim the credential is dead here.
         return {
@@ -239,7 +249,7 @@ class GitHubConnector:
                 content={"repository": repository, "path": path, "found": False},
             )
         if response.status_code >= 400:
-            raise ConnectorError(f"github read failed: {response.status_code}")
+            raise error_from_response(self.name, response, "repository read")
         body = response.json()
         import base64
 

@@ -343,8 +343,8 @@ Not yet real:
   filed the incident cannot approve its remediation;
 - replicas are safe for incident work, the stability scheduler, and alert-intake
   replay through PostgreSQL advisory locks and a shared `intake_deliveries` table;
-  what is still missing for horizontal scale is group-to-role mapping and rate
-  limiting.
+  provider rate limits are enforced per process, so a fleet of N replicas may
+  issue N times the budget, and a limiter shared across replicas is not built.
 
 Production is fail-closed at startup: with `NIGHTJAR_ENVIRONMENT=production` the process
 refuses to boot with the lab connector on, private probes allowed, no bearer token or

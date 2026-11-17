@@ -5,20 +5,13 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any, Literal, Protocol
 
+from nightjar.connectors.errors import ConnectorError
 from nightjar.core.enums import ActionType, EvidenceKind
 from nightjar.core.models import ActionSpec, VerificationPredicate
 
 CheckFn = Callable[[VerificationPredicate], Awaitable[dict[str, Any]]]
 
 Verdict = Literal["ok", "degraded", "unconfigured", "error"]
-
-
-class ConnectorError(RuntimeError):
-    """A typed operation failed. The executor records this and stops the plan."""
-
-    def __init__(self, message: str, *, retryable: bool = False) -> None:
-        super().__init__(message)
-        self.retryable = retryable
 
 
 @dataclass(frozen=True)
@@ -125,3 +118,15 @@ class Connector(Protocol):
     def capabilities(self) -> tuple[Capability, ...]: ...
 
     async def preflight(self, *, deep: bool = False) -> CapabilityReport: ...
+
+
+__all__ = [
+    "Capability",
+    "CapabilityReport",
+    "CheckFn",
+    "Connector",
+    "ConnectorError",
+    "ManualStep",
+    "ToolResult",
+    "Verdict",
+]

@@ -13,6 +13,7 @@ from nightjar.connectors.base import (
     ManualStep,
     ToolResult,
 )
+from nightjar.connectors.ratelimit import limiter_for
 from nightjar.core.enums import ActionType
 from nightjar.core.models import ActionSpec
 from nightjar.core.secrets import EnvVault, SecretError, fingerprint, hint
@@ -115,6 +116,7 @@ class StripeConnector:
                 detail="set NIGHTJAR_STRIPE_SECRET_KEY to probe a read-only key",
             )
         started = time.monotonic()
+        await limiter_for(self.name).acquire()
         try:
             async with httpx.AsyncClient(timeout=self._timeout) as client:
                 response = await client.get(

@@ -10,6 +10,13 @@ import httpx
 import jwt
 
 from nightjar.connectors.base import Capability, CapabilityReport, ConnectorError, ToolResult
+from nightjar.connectors.errors import (
+    NotFound,
+    PermissionDenied,
+    error_from_response,
+    transport_error,
+)
+from nightjar.connectors.ratelimit import limiter_for
 from nightjar.core.enums import ActionType, EvidenceKind
 from nightjar.core.models import ActionSpec, VerificationPredicate
 from nightjar.core.verification import VerificationError
@@ -105,6 +112,7 @@ class GoogleWorkspaceConnector:
             algorithm="RS256",
             headers={"kid": account["private_key_id"]},
         )
+        await limiter_for(self.name).acquire()
         try:
             async with httpx.AsyncClient(timeout=self._timeout) as client:
                 response = await client.post(
@@ -112,9 +120,7 @@ class GoogleWorkspaceConnector:
                     data={"grant_type": JWT_BEARER, "assertion": assertion},
                 )
         except httpx.HTTPError as exc:
-            raise ConnectorError(
-                f"Google token endpoint unreachable: {exc}", retryable=True
-            ) from exc
+            raise transport_error(self.name, exc, "token exchange") from exc
         if response.status_code >= 400:
             detail = _google_error(response)
             raise ConnectorError(
@@ -141,6 +147,7 @@ class GoogleWorkspaceConnector:
         **kwargs: Any,
     ) -> httpx.Response:
         token = await self._access_token(mailbox, scopes)
+        await limiter_for(self.name).acquire()
         try:
             async with httpx.AsyncClient(timeout=self._timeout) as client:
                 return await client.request(
@@ -150,7 +157,7 @@ class GoogleWorkspaceConnector:
                     **kwargs,
                 )
         except httpx.HTTPError as exc:
-            raise ConnectorError(f"Gmail unreachable: {exc}", retryable=True) from exc
+            raise transport_error(self.name, exc, f"{method} {path}") from exc
 
     async def _json(
         self,
@@ -163,16 +170,16 @@ class GoogleWorkspaceConnector:
     ) -> dict[str, Any]:
         response = await self._request(method, path, mailbox, scopes=scopes, **kwargs)
         if response.status_code == 404:
-            raise ConnectorError(f"Gmail object not found: {path}")
+            raise NotFound(f"Gmail object not found: {path}", status=404, provider=self.name)
         if response.status_code == 403:
-            raise ConnectorError(
+            raise PermissionDenied(
                 "Gmail refused the request (403): the delegated account lacks the "
-                "required scope or the mailbox is not covered by delegation"
+                "required scope or the mailbox is not covered by delegation",
+                status=403,
+                provider=self.name,
             )
         if response.status_code >= 400:
-            raise ConnectorError(
-                f"Gmail returned {response.status_code}: {_google_error(response)}"
-            )
+            raise error_from_response(self.name, response, f"Gmail {method} {path}")
         body: dict[str, Any] = response.json() if response.content else {}
         return body
 

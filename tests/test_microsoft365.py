@@ -566,9 +566,11 @@ async def test_an_unreachable_graph_is_retryable(connector: Microsoft365Connecto
     token_route()
     respx.get(FOLDERS).mock(side_effect=httpx.ConnectError("no route to host"))
 
-    with pytest.raises(ConnectorError, match="unreachable") as excinfo:
+    with pytest.raises(ConnectorError, match="unavailable") as excinfo:
         await connector.execute(quarantine_action())
     assert excinfo.value.retryable is True
+    # A connection that never opened cannot have applied anything.
+    assert excinfo.value.maybe_applied is False
 
 
 @respx.mock

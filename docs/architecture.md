@@ -113,6 +113,31 @@ credential exposure must carry a predicate that presents the credential, and
 phishing must carry both containment checks. Only `required` predicates count,
 so a plan cannot weaken its way to resolution with an optional check.
 
+### Connector failures (`connectors/errors.py`, `ratelimit.py`, `retry.py`)
+
+A provider failure is classified before anyone decides what to do about it.
+`error_from_response()` turns a status code into one typed error — `AuthError`,
+`PermissionDenied`, `NotFound`, `Conflict`, `RateLimited`, `Transient`,
+`Validation` — and every error carries `kind`, `retryable`, `retry_after`,
+`status`, and `maybe_applied`. Having one classification point is what stops a
+`429` meaning one thing in Cloudflare and another in Fly.
+
+`maybe_applied` is the field the retry loop actually consults. A `500` from
+`POST /deployments` may have created a deployment, so repeating the call creates a
+second one; a refused connection cannot have applied anything. `transport_error()`
+separates `ConnectError`/`ConnectTimeout` from `ReadTimeout` for that reason, and
+`call_with_retries()` retries only `safe_to_retry()` failures — at most
+`NIGHTJAR_CONNECTOR_MAX_ATTEMPTS`, with exponential backoff and jitter, and with
+the provider's exact `Retry-After` taking precedence when it sent one. The failed
+attempts are recorded on `action.completed`, so a success after two rate limits
+does not look like a clean first try.
+
+Each provider API has a process-local token bucket (`limiter_for(name)`), sized
+below the published limit because the bucket does not coordinate across replicas.
+That is a documented limit, not a silent one: N replicas mean N times the table.
+The lab, plain HTTP probes, and the outbound webhook do not use a bucket, because
+they are not provider APIs with a published budget.
+
 The Google Workspace connector uses a service account with domain-wide
 delegation and impersonates one managed mailbox per request, so Nightjar never
 holds a user password or refresh token. Quarantine is a label plus removal from

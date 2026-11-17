@@ -94,6 +94,10 @@ class Settings(BaseSettings):
     max_cost_usd: float = 0.75
     approval_ttl_seconds: int = 1800
     stability_seconds: int = 900
+    # A connector call is retried only when repeating it cannot duplicate a
+    # mutation, and never waits longer than this even if the provider asks.
+    connector_max_attempts: int = 3
+    connector_retry_max_wait_seconds: float = 30.0
 
     lab_base_url: str = "http://127.0.0.1:8100"
     lab_enabled: bool = True

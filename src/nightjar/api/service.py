@@ -29,8 +29,10 @@ from nightjar.agents.types import (
 from nightjar.api.locks import LockBusy, incident_lock
 from nightjar.api.repository import CaseFile, ConflictError, NotFoundError, Repository
 from nightjar.api.settings import Settings
-from nightjar.connectors.base import ConnectorError, ToolResult
+from nightjar.connectors.base import ToolResult
+from nightjar.connectors.errors import ConnectorError
 from nightjar.connectors.registry import ConnectorRegistry
+from nightjar.connectors.retry import call_with_retries
 from nightjar.core.actions import ActionValidationError, validate_plan
 from nightjar.core.capabilities import available_actions, unavailable_actions
 from nightjar.core.enums import (
@@ -819,13 +821,22 @@ class IncidentService:
                     "execution_id": execution.id,
                 },
             )
+
+            async def _run(action: ActionSpec = action) -> dict[str, Any]:
+                return await self.registry.execute(action)
+
             try:
-                result = await self.registry.execute(action)
+                result, attempts = await call_with_retries(
+                    _run,
+                    attempts=self.settings.connector_max_attempts,
+                    max_wait=self.settings.connector_retry_max_wait_seconds,
+                )
             except Exception as exc:
+                detail = exc.as_dict() if isinstance(exc, ConnectorError) else {"message": str(exc)}
                 await self.repo.record_execution_finish(
                     execution.id,
                     status=ActionStatus.FAILED,
-                    after_state={},
+                    after_state={"error": detail},
                     error=str(exc),
                 )
                 await self.repo.set_action_status(action.id, ActionStatus.FAILED)
@@ -833,7 +844,7 @@ class IncidentService:
                     incident_id,
                     EventType.ACTION_FAILED,
                     actor="executor",
-                    payload={"action_id": action.id, "error": str(exc)},
+                    payload={"action_id": action.id, "error": str(exc), "detail": detail},
                 )
                 await self._fail(incident_id, f"action {action.action_type.value} failed: {exc}")
                 return
@@ -843,15 +854,20 @@ class IncidentService:
                 after_state=result,
             )
             await self.repo.set_action_status(action.id, ActionStatus.EXECUTED)
+            payload: dict[str, Any] = {
+                "action_id": action.id,
+                "action_type": action.action_type.value,
+                "result": result,
+            }
+            if attempts:
+                # A success after a retry is worth recording: the provider was
+                # flaky, and the operator should be able to see that.
+                payload["attempts"] = [attempt.as_dict() for attempt in attempts]
             await self.repo.append_event(
                 incident_id,
                 EventType.ACTION_COMPLETED,
                 actor="executor",
-                payload={
-                    "action_id": action.id,
-                    "action_type": action.action_type.value,
-                    "result": result,
-                },
+                payload=payload,
             )
         if manual_actions:
             await self._set_status(

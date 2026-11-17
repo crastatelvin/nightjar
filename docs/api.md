@@ -303,6 +303,8 @@ incident. Nothing executes on rejection.
 | `NIGHTJAR_ORCHESTRATOR` | `inline` (default) or `temporal` |
 | `NIGHTJAR_STABILITY_SECONDS` | Stability window after T+0 |
 | `NIGHTJAR_APPROVAL_TTL_SECONDS` | Approval expiry |
+| `NIGHTJAR_CONNECTOR_MAX_ATTEMPTS` | Attempts per connector call (default 3) |
+| `NIGHTJAR_CONNECTOR_RETRY_MAX_WAIT_SECONDS` | Cap on a `Retry-After` wait (default 30) |
 | `NIGHTJAR_ALLOW_PRIVATE_PROBES` | Allow loopback probes in labs (default true) |
 | `NIGHTJAR_OPA_URL` | Use a remote OPA policy engine |
 

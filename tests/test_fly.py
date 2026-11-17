@@ -109,6 +109,7 @@ async def test_a_rate_limit_names_retry_after(connector: FlyConnector) -> None:
     with pytest.raises(ConnectorError, match="retry after 9s") as excinfo:
         await connector.execute(restart())
     assert excinfo.value.retryable is True
+    assert excinfo.value.retry_after == 9.0
 
 
 @respx.mock

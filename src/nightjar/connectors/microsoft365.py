@@ -28,6 +28,16 @@ from nightjar.connectors.base import (
     ConnectorError,
     ToolResult,
 )
+from nightjar.connectors.errors import (
+    AuthError,
+    NotFound,
+    PermissionDenied,
+    RateLimited,
+    error_from_response,
+    retry_after_seconds,
+    transport_error,
+)
+from nightjar.connectors.ratelimit import limiter_for
 from nightjar.core.enums import ActionType, EvidenceKind
 from nightjar.core.ids import utcnow
 from nightjar.core.models import ActionSpec, VerificationPredicate
@@ -83,6 +93,7 @@ class Microsoft365Connector:
         if self._token is not None and self._token[1] > now + 60:
             return self._token[0]
         url = f"{self._login}/{_q(self._tenant)}/oauth2/v2.0/token"
+        await limiter_for(self.name).acquire()
         try:
             async with httpx.AsyncClient(timeout=self._timeout) as client:
                 response = await client.post(
@@ -95,9 +106,7 @@ class Microsoft365Connector:
                     },
                 )
         except httpx.HTTPError as exc:
-            raise ConnectorError(
-                f"Microsoft identity endpoint unreachable: {exc}", retryable=True
-            ) from exc
+            raise transport_error(self.name, exc, "client credentials grant") from exc
         if response.status_code >= 400:
             raise ConnectorError(
                 "Microsoft refused the client credentials grant: "
@@ -118,6 +127,7 @@ class Microsoft365Connector:
         self, method: str, path: str, *, params: dict[str, Any] | None = None, **kwargs: Any
     ) -> httpx.Response:
         token = await self._access_token()
+        await limiter_for(self.name).acquire()
         try:
             async with httpx.AsyncClient(timeout=self._timeout) as client:
                 return await client.request(
@@ -128,35 +138,41 @@ class Microsoft365Connector:
                     **kwargs,
                 )
         except httpx.HTTPError as exc:
-            raise ConnectorError(f"Microsoft Graph unreachable: {exc}", retryable=True) from exc
+            raise transport_error(self.name, exc, f"{method} {path}") from exc
 
     async def _json(
         self, method: str, path: str, *, params: dict[str, Any] | None = None, **kwargs: Any
     ) -> dict[str, Any]:
         response = await self._request(method, path, params=params, **kwargs)
         if response.status_code == 429:
-            retry_after = response.headers.get("retry-after", "unknown")
-            raise ConnectorError(
-                f"Microsoft Graph rate limited; retry after {retry_after}s", retryable=True
+            wait = retry_after_seconds(response)
+            raise RateLimited(
+                f"Microsoft Graph rate limited; retry after {wait if wait is not None else 1:g}s",
+                retry_after=wait,
+                status=429,
+                provider=self.name,
             )
         if response.status_code == 401:
-            raise ConnectorError(
+            raise AuthError(
                 "Microsoft Graph rejected the access token (401); the app credentials "
-                "or tenant are wrong"
+                "or tenant are wrong",
+                status=401,
+                provider=self.name,
             )
         if response.status_code == 403:
-            raise ConnectorError(
+            raise PermissionDenied(
                 "Microsoft Graph refused the request (403): the app lacks admin-consented "
                 "application permission for this mailbox, or an application access policy "
-                f"excludes it. {_graph_error(response)}"
+                f"excludes it. {_graph_error(response)}",
+                status=403,
+                provider=self.name,
             )
         if response.status_code == 404:
-            raise ConnectorError(f"Microsoft Graph object not found: {path}")
-        if response.status_code >= 400:
-            raise ConnectorError(
-                f"Microsoft Graph returned {response.status_code}: {_graph_error(response)}",
-                retryable=response.status_code >= 500,
+            raise NotFound(
+                f"Microsoft Graph object not found: {path}", status=404, provider=self.name
             )
+        if response.status_code >= 400:
+            raise error_from_response(self.name, response, f"Graph {method} {path}")
         body: dict[str, Any] = response.json() if response.content else {}
         return body
 

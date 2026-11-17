@@ -28,6 +28,7 @@ from nightjar.api import tables as _tables  # noqa: F401 - registers the metadat
 from nightjar.api.db import Base
 from nightjar.api.main import create_app
 from nightjar.api.settings import Settings
+from nightjar.connectors import ratelimit
 
 DEFAULT_DATABASE_URL = "postgresql+asyncpg://nightjar@127.0.0.1:55432/nightjar_test"
 ROOT = Path(__file__).resolve().parents[1]
@@ -77,6 +78,16 @@ def _wait_for_lab(base_url: str, process: subprocess.Popen[bytes], log: Path) ->
             pass
         time.sleep(0.1)
     raise RuntimeError("lab did not become healthy within 30 seconds")
+
+
+@pytest.fixture(autouse=True)
+def _no_rate_limiting() -> Iterator[None]:
+    """Keep the suite fast; the bucket has its own tests with a fake clock."""
+    ratelimit.configure(enabled=False)
+    ratelimit.reset_limiters()
+    yield
+    ratelimit.configure(enabled=True)
+    ratelimit.reset_limiters()
 
 
 @pytest.fixture(scope="session")

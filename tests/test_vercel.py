@@ -92,6 +92,7 @@ async def test_a_rate_limit_names_retry_after(connector: VercelConnector) -> Non
     with pytest.raises(ConnectorError, match="retry after 7s") as excinfo:
         await connector.execute(rollback())
     assert excinfo.value.retryable is True
+    assert excinfo.value.retry_after == 7.0
 
 
 @respx.mock

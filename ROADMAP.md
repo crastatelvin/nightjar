@@ -176,7 +176,9 @@ exists. What remains in this phase is hardening, not reach.
   is the verified token identity, not a header. ✅
 - Separation of duties for approvals, opt-in so a lone operator is not locked out
   of their own incident. ✅
-- Group-to-role mapping, rate limits, request size caps, and request IDs.
+- Group-to-role mapping, rate limits shared across replicas, request size caps,
+  and request IDs. (Per-process provider token buckets and `Retry-After`-aware
+  connector retries are shipped.)
 - SSE over `LISTEN/NOTIFY` with the poll as fallback.
 
 ### Phase 8 — Evidence for skeptics

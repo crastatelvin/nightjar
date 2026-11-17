@@ -12,6 +12,13 @@ from nightjar.connectors.base import (
     ConnectorError,
     ToolResult,
 )
+from nightjar.connectors.errors import (
+    NotFound,
+    PermissionDenied,
+    error_from_response,
+    transport_error,
+)
+from nightjar.connectors.ratelimit import limiter_for
 from nightjar.core.enums import ActionType, EvidenceKind
 from nightjar.core.models import ActionSpec, VerificationPredicate
 from nightjar.core.verification import VerificationError
@@ -103,27 +110,33 @@ class CloudflareConnector:
     async def _request(
         self, method: str, path: str, *, json: dict[str, Any] | None = None, params: Any = None
     ) -> httpx.Response:
+        await limiter_for(self.name).acquire()
         try:
             async with httpx.AsyncClient(timeout=self._timeout) as client:
                 return await client.request(
                     method, f"{self._base}{path}", headers=self._headers, json=json, params=params
                 )
         except httpx.HTTPError as exc:
-            raise ConnectorError(f"cloudflare unavailable: {exc}", retryable=True) from exc
+            raise transport_error(self.name, exc, f"{method} {path}") from exc
 
-    @staticmethod
-    def _unwrap(response: httpx.Response, what: str) -> dict[str, Any]:
-        if response.status_code in {401, 403}:
-            raise ConnectorError(
-                f"cloudflare refused {what} ({response.status_code}): the token lacks the "
-                "required permission or zone scope"
+    def _unwrap(self, response: httpx.Response, what: str) -> dict[str, Any]:
+        if response.status_code == 401:
+            raise PermissionDenied(
+                f"cloudflare refused {what} (401): the token is invalid",
+                status=401,
+                provider=self.name,
+            )
+        if response.status_code == 403:
+            raise PermissionDenied(
+                f"cloudflare refused {what} (403): the token lacks the required permission "
+                "or zone scope",
+                status=403,
+                provider=self.name,
             )
         if response.status_code == 404:
-            raise ConnectorError(f"cloudflare {what}: not found (404)")
+            raise NotFound(f"cloudflare {what}: not found (404)", status=404, provider=self.name)
         if response.status_code >= 400:
-            raise ConnectorError(
-                f"cloudflare {what} failed: {response.status_code} {response.text[:300]}"
-            )
+            raise error_from_response(self.name, response, what)
         body: dict[str, Any] = response.json() if response.content else {}
         if not body.get("success", False):
             raise ConnectorError(f"cloudflare rejected {what}: {body.get('errors')}")

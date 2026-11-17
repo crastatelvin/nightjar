@@ -161,15 +161,33 @@ class Connector(Protocol):
 | Error | HTTP | Retry | Effect |
 |---|---|---|---|
 | `AuthError` | 401 | no | action fails, incident reopens, doctor marks provider red |
-| `PermissionError` | 403 | no | action fails with missing-scope hint |
-| `NotFoundError` | 404 | no | action fails; target may have been deleted |
-| `ConflictError` | 409 | no | read back state, treat as possibly applied |
+| `PermissionDenied` | 403 | no | action fails with missing-scope hint |
+| `NotFound` | 404 | no | action fails; target may have been deleted |
+| `Conflict` | 409 | no | read back state, treat as possibly applied |
 | `RateLimited` | 429 | yes | honor `Retry-After`, then backoff |
-| `TransientError` | 5xx, timeout | yes | max 3 attempts, jitter |
-| `ValidationError` | 400/422 | no | planner bug; record and stop |
+| `Transient` | 5xx, timeout | if safe | max 3 attempts, jitter |
+| `Validation` | 400/422 | no | planner bug; record and stop |
 | `PropagationPending` | — | yes | verifier-only; not an action failure |
 
-`ConnectorError.retryable` stays for compatibility; new code raises subclasses.
+**Shipped** (`src/nightjar/connectors/errors.py`). Every error carries `kind`,
+`retryable`, `retry_after`, `status`, `provider`, and — the field that makes
+retries safe — `maybe_applied`. `error_from_response()` is the single place a
+status code becomes an error, so a `429` cannot mean one thing in Cloudflare and
+another in Fly, and `retry_after_seconds()` understands both the seconds form and
+the HTTP-date form of the header.
+
+`maybe_applied` is the honest part. A `500` from `POST /deployments` may have
+created a deployment; repeating the call creates a second one. A connection that
+was refused cannot have applied anything. `transport_error()` distinguishes
+`ConnectError`/`ConnectTimeout` (safe) from `ReadTimeout` and dropped responses
+(not safe), and `safe_to_retry()` combines it with `retryable`. The executor asks
+`safe_to_retry()`, never `retryable` alone.
+
+`ConnectorError` remains the base class, so a connector can be migrated one call
+site at a time and existing `except ConnectorError` handlers keep working. Not
+shipped: an `ActionResult` wrapper. Actions already return a recorded dict, and a
+wrapper with no consumer would be churn; the field will be added when idempotent
+replay (6.3) needs it.
 
 ### 3.3 Idempotency
 
@@ -208,6 +226,31 @@ local, conservative defaults.
 | Stripe | 4 req/s | 100 req/s live, but probes are rare |
 
 `429` is never retried before `Retry-After`.
+
+**Shipped** (`src/nightjar/connectors/ratelimit.py`). A classic token bucket per
+provider, created on first use and shared by every connector instance in the
+process. Cloudflare, GitHub, Google, Microsoft, Vercel, Render, Fly, and Stripe
+call `limiter_for(name).acquire()` before every request; the local lab, plain
+HTTP probes, and the outbound webhook do not, because they are not provider APIs
+with a published budget.
+
+The bucket is process-local, and that is a real limit: N replicas each honour the
+budget, so the effective rate is N times the table. The table's numbers sit well
+below every provider's published limit for exactly that reason. A shared limiter
+(Redis or a database row) is recorded here as open work rather than pretended.
+
+`Retry-After` handling lives in two places on purpose: the bucket prevents the
+`429`, and `retry.py` obeys the header when one arrives anyway. A `429` waits
+exactly the provider's number, capped by
+`NIGHTJAR_CONNECTOR_RETRY_MAX_WAIT_SECONDS` (default 30) so a provider cannot
+park an incident for an hour.
+
+**Shipped** (`src/nightjar/connectors/retry.py`). `call_with_retries()` retries
+only `safe_to_retry()` failures, up to `NIGHTJAR_CONNECTOR_MAX_ATTEMPTS` (default
+3), with exponential backoff plus jitter for transient errors and the exact
+`Retry-After` for rate limits. The executor records the failed attempts on
+`action.completed`, so a success after two 429s is visible in the timeline
+instead of looking like a clean first try.
 
 ### 3.5 Secret handling
 
@@ -1127,9 +1170,9 @@ shipped: Google Workspace (6.9) and Microsoft 365 (6.10).
 | ID | Task | Files | Acceptance | Est |
 |---|---|---|---|---|
 | 6.1 ✅ | Fail-closed `Settings` validator + production block in `.env.example` | `api/settings.py`, `.env.example`, `tests/test_settings.py` | production with lab/private/no-auth raises; dev unchanged | 4 |
-| 6.2 | Connector SDK v2: `Capability`, `ActionResult`, error taxonomy | `connectors/base.py`, `connectors/errors.py`, `tests/test_connector_base.py` | existing connectors migrate; registry returns `ActionResult` | 8 |
+| 6.2 ◐ | Error taxonomy + `maybe_applied`; `ActionResult` deferred | `connectors/errors.py`, `connectors/*.py`, `tests/test_connector_errors.py` | every connector classifies status → typed error | 8 |
 | 6.3 | Idempotency table, key derivation, replay path | `api/tables.py`, `api/repository.py`, `connectors/idempotency.py`, migration | same action twice → one mutation; `replay=True` | 8 |
-| 6.4 | Per-provider token bucket + `Retry-After` handling | `connectors/ratelimit.py`, tests | 429 waits exactly `Retry-After`; no burst over budget | 5 |
+| 6.4 ✅ | Per-provider token bucket + `Retry-After` retry loop | `connectors/ratelimit.py`, `connectors/retry.py`, `api/service.py`, tests | 429 waits exactly `Retry-After`; no burst over budget | 5 |
 | 6.5 ✅ | `SecretVault`, `CredentialRef`, redaction registry | `core/secrets.py`, `core/redaction.py`, tests | raw secret absent from DB/log/evidence | 8 |
 | 6.6 ✅ | `nightjarctl doctor` + `GET /v1/meta/capabilities` | `cli/doctor.py`, `api/routers/meta.py`, `pyproject.toml`, tests | table renders; exit 0 only when all required ok | 10 |
 | 6.7 ✅ | GitHub revocation connector (3 modes) | `connectors/github.py`, tests | 202 recorded; probe 401 passes; 403 fails | 10 |
