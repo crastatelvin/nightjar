@@ -1,9 +1,23 @@
 from __future__ import annotations
 
+import os
+
 import pytest
 from pydantic import ValidationError
 
 from nightjar.api.settings import Settings
+
+
+@pytest.fixture(autouse=True)
+def _no_ambient_settings(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Assert defaults, not whatever the runner exports.
+
+    CI sets ``NIGHTJAR_ENVIRONMENT=test`` for the test suite, which would otherwise
+    make a test about *development* defaults fail only there.
+    """
+    for name in list(os.environ):
+        if name.startswith("NIGHTJAR_"):
+            monkeypatch.delenv(name, raising=False)
 
 
 def _production(**overrides: object) -> Settings:

@@ -72,20 +72,29 @@ def evaluation_settings(
     )
 
 
-def _approve_pending(client: TestClient, incident_id: str, seen: set[str]) -> int:
+def _approve_pending(client: TestClient, incident_id: str, seen: set[str]) -> str | None:
+    """Approve everything pending, and report the last refusal.
+
+    Only a decision the API actually recorded is remembered. The incident lock is
+    held by the pipeline for part of its run, so an approval posted at the wrong
+    moment gets ``409``; marking it seen would leave the case waiting for an
+    approval nobody would ever send again, and the case would time out looking
+    like a product failure.
+    """
     case = client.get(f"/v1/incidents/{incident_id}").json()
-    granted = 0
+    refusal: str | None = None
     for approval in case["approvals"]:
         if approval["status"] != "pending" or approval["id"] in seen:
             continue
-        seen.add(approval["id"])
         response = client.post(
             f"/v1/incidents/{incident_id}/approvals/{approval['id']}",
             json={"approved": True, "comment": "eval harness auto-approval"},
         )
         if response.status_code == 200:
-            granted += 1
-    return granted
+            seen.add(approval["id"])
+        else:
+            refusal = f"{response.status_code} {response.text[:160]}"
+    return refusal
 
 
 def _observation_from_case(case: dict[str, Any]) -> CaseObservation:
@@ -166,9 +175,10 @@ def run_case(
     seen: set[str] = set()
     status = "intake"
     timed_out = False
+    refusal: str | None = None
     while True:
         case_file = client.get(f"/v1/incidents/{incident_id}").json()
-        _approve_pending(client, incident_id, seen)
+        refusal = _approve_pending(client, incident_id, seen) or refusal
         status = case_file["incident"]["status"]
         if status in TERMINAL_STATUSES:
             break
@@ -185,6 +195,8 @@ def run_case(
     observation.timed_out = timed_out
     if timed_out:
         observation.error = f"timed out after {timeout:.0f}s in status {status!r}"
+        if refusal:
+            observation.error += f"; last approval refusal: {refusal}"
     return score_case(case, observation, latency_seconds=time.monotonic() - started)
 
 

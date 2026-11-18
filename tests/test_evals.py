@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import httpx
 import pytest
 
 from nightjar.evals.catalog import load_catalog, suite_case_counts
 from nightjar.evals.models import CaseObservation, CaseScore, EvalCase
-from nightjar.evals.runner import summarize
+from nightjar.evals.runner import _approve_pending, summarize
 from nightjar.evals.scorer import score_case
 from nightjar.lab.cornershop.app import INJECTION_MARKER
 
@@ -197,3 +199,39 @@ def test_lab_exposes_injection_payload_to_read_probes(lab_url: str) -> None:
         )
         message = lab.get("/lab/mail/msg_phish_0001").json()
         assert INJECTION_MARKER in message["body"]
+
+
+class _ApprovalClient:
+    """Just enough of a client to exercise the harness's approval loop."""
+
+    def __init__(self, codes: list[int]) -> None:
+        self.codes = codes
+        self.posts = 0
+
+    def get(self, _url: str) -> SimpleNamespace:
+        return SimpleNamespace(json=lambda: {"approvals": [{"id": "ap_1", "status": "pending"}]})
+
+    def post(self, _url: str, **_kwargs: object) -> SimpleNamespace:
+        self.posts += 1
+        return SimpleNamespace(status_code=self.codes.pop(0), text="detail")
+
+
+def test_a_refused_approval_is_retried_not_remembered() -> None:
+    """A 409 is the incident lock, not a decision: the next pass must try again."""
+    client = _ApprovalClient([409, 200])
+    seen: set[str] = set()
+
+    assert _approve_pending(client, "inc_1", seen) == "409 detail"
+    assert seen == set()
+
+    assert _approve_pending(client, "inc_1", seen) is None
+    assert seen == {"ap_1"}
+    assert client.posts == 2
+
+
+def test_a_permanent_refusal_is_reported_and_retried() -> None:
+    client = _ApprovalClient([409, 409])
+    seen: set[str] = set()
+    assert _approve_pending(client, "inc_1", seen) == "409 detail"
+    assert _approve_pending(client, "inc_1", seen) == "409 detail"
+    assert seen == set()
