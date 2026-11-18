@@ -6,7 +6,7 @@ All `/v1` endpoints require `Authorization: Bearer <credential>`, except the
 signed alert intake (`POST /v1/intake/webhook`), which is authenticated by an HMAC
 signature instead. Health endpoints are unauthenticated so orchestrators can probe
 them. Errors use `{"detail": "..."}` with `400`, `401`, `403`, `404`, `409`, `413`,
-`422`, or `503` as appropriate.
+`422`, `429`, or `503` as appropriate.
 
 Two credential styles are supported and they promise different things:
 
@@ -30,6 +30,47 @@ is development-only and refused in production.
 When `NIGHTJAR_REQUIRE_SEPARATION_OF_DUTIES=true`, approving an R2 action as the
 person who filed the incident returns `403` and executes nothing. The default is
 `false` because a one-person operations team is the target deployment.
+
+## Request ids, budgets, and body limits
+
+Every response carries `x-request-id`. A caller-supplied value of 1–128 characters
+from `A-Z a-z 0-9 . _ : -` is echoed unchanged; anything else, or nothing, is
+replaced with a fresh 32-character id. The same id is bound to the request's log
+context, so the access line, any application error, and the response the caller
+saw all carry one value. Quote it in a support ticket.
+
+Each caller has a token bucket:
+
+| Behaviour | Value |
+| --- | --- |
+| Budget | `NIGHTJAR_API_RATE_LIMIT_PER_MINUTE` (default 120) |
+| Burst | `NIGHTJAR_API_RATE_LIMIT_BURST` (default 60) |
+| Key | peer address; the last `X-Forwarded-For` entry when that is trusted |
+
+Over budget is `429` with `Retry-After` in whole seconds. Successful responses and
+`429`s carry `x-ratelimit-limit`, `x-ratelimit-remaining`, and
+`x-ratelimit-reset`, so a client can slow down before it is refused. Health
+endpoints are never counted. The budget is charged before the credential is
+checked: a refused token costs the same as an accepted one, so guessing tokens is
+not a way around the limit.
+
+Two consequences worth knowing:
+
+- The bucket is per process. With N replicas a caller can spend N times the
+  configured budget, so the default is sized well below what one replica serves.
+- The web UI reaches the API through a server-side proxy, so every browser
+  session shares the proxy's address and therefore one budget. Raise
+  `NIGHTJAR_API_RATE_LIMIT_PER_MINUTE` when many people watch the same dashboard.
+
+Behind a proxy you control, set `NIGHTJAR_API_TRUST_FORWARDED_FOR=true` to key on
+the last `X-Forwarded-For` entry. Leave it off when nothing you control sets that
+header: otherwise a caller picks its own address and its own budget.
+
+A body over `NIGHTJAR_API_MAX_BODY_BYTES` (default 1 MiB) is refused with `413`
+before it is parsed — by declared `Content-Length` when present, by counting
+chunks otherwise. The signed intake has a smaller cap of its own,
+`NIGHTJAR_INTAKE_MAX_BODY_BYTES` (default 64 KiB), because it is the only
+unauthenticated write path.
 
 ## Health
 
@@ -299,6 +340,11 @@ incident. Nothing executes on rejection.
 | `NIGHTJAR_OIDC_AUDIENCE` | Required audience; an issuer without one is refused at startup |
 | `NIGHTJAR_OIDC_GROUPS_CLAIM` | Claim holding group membership (default `groups`) |
 | `NIGHTJAR_REQUIRE_SEPARATION_OF_DUTIES` | Reporter cannot approve their own R2 action (default false) |
+| `NIGHTJAR_API_RATE_LIMIT_ENABLED` | Per-caller budget on/off (default true) |
+| `NIGHTJAR_API_RATE_LIMIT_PER_MINUTE` | Tokens per minute per caller (default 120) |
+| `NIGHTJAR_API_RATE_LIMIT_BURST` | Largest back-to-back burst per caller (default 60) |
+| `NIGHTJAR_API_TRUST_FORWARDED_FOR` | Key callers by the last `X-Forwarded-For` entry (default false) |
+| `NIGHTJAR_API_MAX_BODY_BYTES` | Largest accepted request body (default 1048576) |
 | `NIGHTJAR_CORS_ORIGINS` | Comma-separated browser origins |
 | `NIGHTJAR_ORCHESTRATOR` | `inline` (default) or `temporal` |
 | `NIGHTJAR_STABILITY_SECONDS` | Stability window after T+0 |

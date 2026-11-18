@@ -228,6 +228,21 @@ replayed at a second replica is rejected by the database rather than by one
 process's memory; a failed filing releases the claim instead of burning the
 delivery id.
 
+Request handling is wrapped by two ASGI middlewares. `RequestContextMiddleware`
+accepts or generates `x-request-id`, binds it to a context variable so every log
+line emitted while the request runs carries it, and writes the rate-limit headers
+the auth dependency recorded. `BodySizeLimitMiddleware` refuses an oversized body
+from its declared `Content-Length` before touching it, and otherwise counts
+streamed chunks, raising `413` from inside `receive` so Starlette turns it into a
+response wherever the body happens to be read. Both sit outside the routers, so a
+`413` or `429` is correlated and CORS-visible like any other response.
+
+The API budget (`api/ratelimit.py`) is a token bucket per caller address, charged
+before the credential is verified so a flood of invalid tokens is not free. It is
+deliberately process-local and documented as such: the default is sized below what
+one replica can serve, and a shared limiter is separate work. Connector budgets
+protect providers; this one protects Nightjar.
+
 Per-incident work is serialized across processes with PostgreSQL session-level
 advisory locks on a dedicated connection (a `NullPool` engine, because a pooled
 connection commit would silently drop the lock). The stability scheduler takes a

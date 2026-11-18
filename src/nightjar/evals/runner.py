@@ -65,6 +65,10 @@ def evaluation_settings(
         stability_seconds=stability_seconds,
         approval_ttl_seconds=300,
         allow_private_probes=True,
+        # The harness is the only client and drives hundreds of requests in a
+        # burst; the API budget exists to protect against real callers, so it is
+        # not in the way of measuring the product.
+        api_rate_limit_enabled=False,
     )
 
 

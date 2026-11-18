@@ -152,6 +152,9 @@ def settings(database_url: str, lab_url: str) -> Settings:
         stability_seconds=0,
         approval_ttl_seconds=300,
         allow_private_probes=True,
+        # The API budget has its own tests; the rest of the suite makes far more
+        # requests than a real caller would and should not be throttled by it.
+        api_rate_limit_enabled=False,
     )
 
 

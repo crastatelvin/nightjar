@@ -17,7 +17,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import ValidationError
 
 from nightjar.api import schemas
-from nightjar.api.deps import get_service
+from nightjar.api.deps import enforce_peer_budget, get_service
 from nightjar.api.service import IncidentService
 from nightjar.core.enums import IncidentSource
 from nightjar.core.signatures import SignatureError, verify_signature
@@ -96,6 +96,10 @@ async def intake_webhook(
         )
 
     limit = _body_limit(request)
+    # The HMAC proves the sender knows the secret; it says nothing about how
+    # often they may call, so the peer address is billed like shared-token
+    # traffic. This runs before the body is read so a flood is cheap to refuse.
+    enforce_peer_budget(request)
     body = await _read_body(request, limit)
 
     try:

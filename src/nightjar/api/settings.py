@@ -30,6 +30,17 @@ class Settings(BaseSettings):
     api_host: str = "127.0.0.1"
     api_port: int = 8000
     api_token: str | None = None
+    # The API's own budget, separate from the per-provider connector budgets.
+    # A caller gets `per_minute` tokens per minute and may spend up to `burst`
+    # of them at once. Process-local: N replicas means N times this budget.
+    api_rate_limit_enabled: bool = True
+    api_rate_limit_per_minute: int = Field(default=120, ge=1)
+    api_rate_limit_burst: int = Field(default=60, ge=1)
+    # Only trust X-Forwarded-For when a proxy you control sets it; otherwise a
+    # caller can pick its own address and its own budget.
+    api_trust_forwarded_for: bool = False
+    # Cap on any request body. The signed intake has a smaller cap of its own.
+    api_max_body_bytes: int = Field(default=1_048_576, ge=1024)
     oidc_issuer: str | None = None
     oidc_audience: str | None = None
     oidc_groups_claim: str = "groups"

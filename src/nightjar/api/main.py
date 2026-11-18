@@ -13,9 +13,14 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 from nightjar import __version__
 from nightjar.agents.runtime import build_runtime
-from nightjar.api import db
+from nightjar.api import db, ratelimit
 from nightjar.api.auth import OIDCVerifier
 from nightjar.api.locks import LockBusy, scheduler_leader
+from nightjar.api.middleware import (
+    BodySizeLimitMiddleware,
+    RequestContextMiddleware,
+    build_log_config,
+)
 from nightjar.api.replay import PostgresReplayStore
 from nightjar.api.repository import ConflictError, NotFoundError, Repository
 from nightjar.api.routers import approvals, health, incidents, intake, meta
@@ -86,6 +91,16 @@ def create_app(
     )
     api.state.settings = resolved
     api.state.service = service
+    # The budget is per app instance, not per process: a test that builds two
+    # apps must not have one spend the other's tokens.
+    api.state.rate_limiter = (
+        ratelimit.CallerLimiter(
+            per_minute=resolved.api_rate_limit_per_minute,
+            burst=resolved.api_rate_limit_burst,
+        )
+        if resolved.api_rate_limit_enabled
+        else None
+    )
     api.state.oidc = (
         OIDCVerifier(
             issuer=resolved.oidc_issuer,
@@ -101,6 +116,10 @@ def create_app(
         ttl_seconds=max(resolved.intake_webhook_tolerance_seconds * 2, 600),
     )
 
+    api.add_middleware(BodySizeLimitMiddleware, max_bytes=resolved.api_max_body_bytes)
+    api.add_middleware(RequestContextMiddleware)
+    # Added last so it is outermost: a 413 or 429 still carries the CORS headers
+    # a browser needs to read the error instead of showing an opaque failure.
     api.add_middleware(
         CORSMiddleware,
         allow_origins=resolved.cors_origins,
@@ -164,6 +183,7 @@ def run() -> None:
         host=settings.api_host,
         port=settings.api_port,
         log_level=settings.log_level.lower(),
+        log_config=build_log_config(settings.log_level.upper()),
     )
 
 

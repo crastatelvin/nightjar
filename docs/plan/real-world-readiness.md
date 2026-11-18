@@ -61,7 +61,7 @@ recorded incidents, one per class, with chain verification green.
 | Fail-closed production defaults | Real | `Settings._refuse_unsafe_production` |
 | Multi-process safety | **Real for incidents, the scheduler, and intake replay** | `api/locks.py`, `api/replay.py`, `tests/test_locks.py`, `tests/test_replay_store.py` |
 | Real-model evaluation | **Missing** | All numbers are mock |
-| OIDC / RBAC / rate limits | **Missing** | One shared token, self-asserted actor |
+| OIDC / RBAC / rate limits | **OIDC and a per-caller API budget are real**; group-to-role mapping and a shared cross-replica limiter are missing | `api/auth.py`, `api/ratelimit.py` |
 
 Two defaults are actively dangerous in production and are fixed first:
 
@@ -1215,13 +1215,16 @@ shipped: Google Workspace (6.9) and Microsoft 365 (6.10).
 
 ### Phase 7 — Multi-process and auth (P0)
 
+Status: 7.1, 7.2, 7.3, and 7.5 are shipped. 7.4 ships separation of duties;
+group-to-role mapping is still open. 7.6 is open.
+
 | ID | Task | Files | Acceptance | Est |
 |---|---|---|---|---|
-| 7.1 | Postgres advisory lock helper | `api/locks.py`, tests | lock survives commit; busy → 409 | 6 |
-| 7.2 | Scheduler leader election | `api/main.py`, `api/locks.py`, tests | two processes, one runs checks | 4 |
+| 7.1 ✅ | Postgres advisory lock helper | `api/locks.py`, tests | lock survives commit; busy → 409 | 6 |
+| 7.2 ✅ | Scheduler leader election | `api/main.py`, `api/locks.py`, tests | two processes, one runs checks | 4 |
 | 7.3 ✅ | OIDC JWT auth + JWKS cache | `api/auth.py`, `api/deps.py`, `tests/test_auth.py` | valid token → subject; expired/forged → 403 | 12 |
 | 7.4 ◐ | Separation of duties shipped; group-to-role mapping open | `api/auth.py`, `api/service.py`, `tests/test_separation_of_duties.py` | reporter cannot approve own R2 | 6 |
-| 7.5 | Rate limiting + body caps + request IDs | `api/middleware.py`, tests | 429 after budget; 413 over cap | 8 |
+| 7.5 ✅ | Rate limiting + body caps + request IDs | `api/middleware.py`, `api/ratelimit.py`, tests | 429 after budget; 413 over cap | 8 |
 | 7.6 | SSE via `LISTEN/NOTIFY` with poll fallback | `api/repository.py`, `api/routers/incidents.py`, tests | p95 < 150 ms | 8 |
 
 **Phase 7 total: ~44 h.**
