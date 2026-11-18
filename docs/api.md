@@ -31,6 +31,16 @@ When `NIGHTJAR_REQUIRE_SEPARATION_OF_DUTIES=true`, approving an R2 action as the
 person who filed the incident returns `403` and executes nothing. The default is
 `false` because a one-person operations team is the target deployment.
 
+`NIGHTJAR_OIDC_APPROVER_GROUPS` narrows *who* may sign off: a comma-separated (or
+JSON) list of values from the group claim. Approving an R2 action or attesting a
+manual step then requires membership in one of those groups, and anything else is
+`403` with the group names in the message. Group values are compared exactly to
+what the issuer put in the claim, so a directory that emits object ids is
+configured with those ids. The shared token carries no group claim, so it is
+refused rather than allowed to bypass the policy; setting approver groups
+therefore requires OIDC and is refused at startup without
+`NIGHTJAR_OIDC_ISSUER`.
+
 ## Request ids, budgets, and body limits
 
 Every response carries `x-request-id`. A caller-supplied value of 1–128 characters
@@ -350,6 +360,7 @@ incident. Nothing executes on rejection.
 | `NIGHTJAR_OIDC_ISSUER` | Verify JWTs from this issuer instead of a shared token |
 | `NIGHTJAR_OIDC_AUDIENCE` | Required audience; an issuer without one is refused at startup |
 | `NIGHTJAR_OIDC_GROUPS_CLAIM` | Claim holding group membership (default `groups`) |
+| `NIGHTJAR_OIDC_APPROVER_GROUPS` | Groups whose members may approve R2 or attest manual steps |
 | `NIGHTJAR_REQUIRE_SEPARATION_OF_DUTIES` | Reporter cannot approve their own R2 action (default false) |
 | `NIGHTJAR_API_RATE_LIMIT_ENABLED` | Per-caller budget on/off (default true) |
 | `NIGHTJAR_API_RATE_LIMIT_PER_MINUTE` | Tokens per minute per caller (default 120) |

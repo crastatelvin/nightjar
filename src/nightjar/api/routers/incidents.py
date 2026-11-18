@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 
 from nightjar.api import schemas
-from nightjar.api.deps import actor, get_service, require_auth
+from nightjar.api.deps import actor, get_service, require_approver, require_auth
 from nightjar.api.notify import TimelineHub, TimelineWatch
 from nightjar.api.repository import CaseFile, ConflictError, NotFoundError
 from nightjar.api.service import IncidentService
@@ -174,6 +174,7 @@ async def list_manual_steps(
 @router.post(
     "/{incident_id}/manual-steps/{action_id}/attest",
     response_model=schemas.CaseFileResponse,
+    dependencies=[Depends(require_approver)],
 )
 async def attest_manual_step(
     incident_id: str,

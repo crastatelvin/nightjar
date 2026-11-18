@@ -218,6 +218,14 @@ the target deployment is often a single operator, and a rule that locks the only
 operator out of their own incident would be turned off immediately — worse than
 not having it.
 
+Who may sign off at all is a directory question, answered from the verified
+group claim (`NIGHTJAR_OIDC_APPROVER_GROUPS`). The check is a route dependency on
+the approval and manual-step endpoints, which run after `require_auth`, so it sees
+a verified identity or nothing. A shared token has no groups, so it is refused
+when groups are configured: a policy a static secret silently bypasses is not one.
+Configuring groups without an issuer is refused at startup, because it would lock
+every approval out while looking like a control.
+
 Alert intake is the one mutating route that does not take a bearer token. It is
 authenticated by an HMAC-SHA256 over `"<timestamp>.<body>"`, compared in constant
 time, with a 300 s timestamp window, a body cap, and a delivery-id replay guard.

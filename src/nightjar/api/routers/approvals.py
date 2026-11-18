@@ -5,7 +5,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException
 
 from nightjar.api import schemas
-from nightjar.api.deps import actor, get_service, require_auth
+from nightjar.api.deps import actor, get_service, require_approver, require_auth
 from nightjar.api.repository import ConflictError, NotFoundError
 from nightjar.api.routers.incidents import _load_case
 from nightjar.api.service import IncidentService
@@ -30,7 +30,11 @@ async def list_approvals(
     return await service.repo.list_approvals(incident_id)
 
 
-@router.post("/{incident_id}/approvals/{approval_id}", response_model=schemas.CaseFileResponse)
+@router.post(
+    "/{incident_id}/approvals/{approval_id}",
+    response_model=schemas.CaseFileResponse,
+    dependencies=[Depends(require_approver)],
+)
 async def decide_approval(
     incident_id: str,
     approval_id: str,

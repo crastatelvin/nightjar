@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import secrets
 import time
+from collections.abc import Collection
 from dataclasses import dataclass
 from typing import Any, Literal
 
@@ -58,6 +59,15 @@ class Identity:
     def actor(self) -> str:
         """The name recorded in the timeline and on approvals."""
         return (self.email or self.subject)[:100]
+
+    def in_group(self, names: Collection[str]) -> bool:
+        """Whether this identity carries any of ``names`` in its group claim.
+
+        Group values are compared exactly to what the issuer put in the claim;
+        a directory that emits object ids rather than names is configured with
+        those ids, because guessing a mapping would be inventing a claim.
+        """
+        return any(group in names for group in self.groups)
 
 
 def _bearer(authorization: str | None) -> str:

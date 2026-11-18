@@ -919,9 +919,18 @@ to work is worse than one that is honestly optional. The refusal is covered by
 webhook-filed incident where the reporter is `alert:webhook` and any human may
 approve.
 
-Group-to-role mapping (7.4's original scope) is **not** shipped: groups are parsed
-from the token and exposed on `Identity`, but every authenticated caller is
-authorized for every route. Break-glass remains denied in v1.
+**Group-to-role mapping** is the second half, and it is deliberately narrow.
+`NIGHTJAR_OIDC_APPROVER_GROUPS` lists claim values whose holders may approve an R2
+action or attest a manual step; every other authenticated caller can still read,
+file, note, retry, and verify. That is the only role distinction v1 needs: the
+risky decision is sign-off, and everything else is work the on-call person already
+does. Values are compared exactly to the claim, because mapping a directory's
+object ids to friendly names would be inventing a claim the issuer did not make.
+The shared token carries no groups, so when approver groups are configured it is
+refused rather than treated as a master key, and configuring groups without an
+issuer fails at startup. Covered by `tests/test_approver_groups.py`.
+
+Break-glass remains denied in v1.
 
 ---
 
@@ -955,6 +964,7 @@ real gate, not a label.
 | `NIGHTJAR_ENVIRONMENT` | `development` / `test` / `production` |
 | `NIGHTJAR_MANAGED_TARGETS` | JSON allowlist |
 | `NIGHTJAR_OIDC_ISSUER`, `_AUDIENCE`, `_GROUPS_CLAIM` | OIDC auth; audience is mandatory when the issuer is set |
+| `NIGHTJAR_OIDC_APPROVER_GROUPS` | groups whose members may sign off; requires OIDC |
 | `NIGHTJAR_REQUIRE_SEPARATION_OF_DUTIES` | reporter cannot approve their own R2 action (default false) |
 | `NIGHTJAR_GITHUB_APP_ID`, `_APP_PRIVATE_KEY`, `_INSTALLATION_ID`, `_ORG` | org PAT revocation |
 | `NIGHTJAR_STRIPE_SECRET_KEY` | read-only revocation probe |
@@ -1215,15 +1225,16 @@ shipped: Google Workspace (6.9) and Microsoft 365 (6.10).
 
 ### Phase 7 — Multi-process and auth (P0)
 
-Status: 7.1, 7.2, 7.3, 7.5, and 7.6 are shipped. 7.4 ships separation of duties;
-group-to-role mapping is still open.
+Status: Phase 7 is shipped except the Temporal signalling follow-up tracked in
+Phase 8. OIDC carries identity and approver-group membership; separation of duties
+and approver groups are both enforced.
 
 | ID | Task | Files | Acceptance | Est |
 |---|---|---|---|---|
 | 7.1 ✅ | Postgres advisory lock helper | `api/locks.py`, tests | lock survives commit; busy → 409 | 6 |
 | 7.2 ✅ | Scheduler leader election | `api/main.py`, `api/locks.py`, tests | two processes, one runs checks | 4 |
 | 7.3 ✅ | OIDC JWT auth + JWKS cache | `api/auth.py`, `api/deps.py`, `tests/test_auth.py` | valid token → subject; expired/forged → 403 | 12 |
-| 7.4 ◐ | Separation of duties shipped; group-to-role mapping open | `api/auth.py`, `api/service.py`, `tests/test_separation_of_duties.py` | reporter cannot approve own R2 | 6 |
+| 7.4 ✅ | Separation of duties + OIDC approver groups | `api/auth.py`, `api/deps.py`, `api/service.py`, `tests/test_separation_of_duties.py`, `tests/test_approver_groups.py` | reporter cannot approve own R2; non-members cannot sign off | 6 |
 | 7.5 ✅ | Rate limiting + body caps + request IDs | `api/middleware.py`, `api/ratelimit.py`, tests | 429 after budget; 413 over cap | 8 |
 | 7.6 ✅ | SSE via `LISTEN/NOTIFY` with poll fallback | `api/notify.py`, `api/repository.py`, `api/routers/incidents.py`, tests | p95 < 150 ms | 8 |
 

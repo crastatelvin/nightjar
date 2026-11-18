@@ -56,6 +56,30 @@ def enforce_peer_budget(request: Request) -> None:
     _spend_budget(request, _peer_key(request))
 
 
+async def require_approver(request: Request) -> None:
+    """Refuse a sign-off from a caller outside the configured approver groups.
+
+    Runs after ``require_auth``, which the router already depends on, so the
+    identity is set. With no groups configured this is a no-op: the deployment
+    has said any authenticated caller may approve, which is the default because
+    most Nightjar deployments are one person.
+
+    The shared token carries no group claim. When approver groups are configured
+    it is refused rather than allowed through: a policy that a static secret
+    silently bypasses is a policy nobody should rely on. A deployment that gates
+    approvals must use OIDC for the people who approve.
+    """
+    required = request.app.state.settings.oidc_approver_groups
+    if not required:
+        return
+    identity: Identity | None = getattr(request.state, "identity", None)
+    if identity is None or identity.method != "oidc" or not identity.in_group(required):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=("this action must be signed off by a member of one of: " + ", ".join(required)),
+        )
+
+
 async def require_auth(
     request: Request,
     authorization: str | None = Header(default=None),

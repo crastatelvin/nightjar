@@ -8,6 +8,21 @@ from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
+def _parse_str_list(value: Any, *, field: str) -> Any:
+    """Accept a JSON list or the comma-separated form used in .env.example."""
+    if isinstance(value, str):
+        text = value.strip()
+        if not text:
+            return []
+        if text.startswith("["):
+            parsed = json.loads(text)
+            if not isinstance(parsed, list):
+                raise ValueError(f"{field} JSON must be a list")
+            return parsed
+        return [part.strip() for part in text.split(",") if part.strip()]
+    return value
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_prefix="NIGHTJAR_",
@@ -44,6 +59,10 @@ class Settings(BaseSettings):
     oidc_issuer: str | None = None
     oidc_audience: str | None = None
     oidc_groups_claim: str = "groups"
+    # Group names whose members may sign off on an R2 action or attest a manual
+    # step. Empty means any authenticated caller may; a deployment that lists
+    # groups has decided that "holds a credential" is not the same as "may approve".
+    oidc_approver_groups: Annotated[list[str], NoDecode] = Field(default_factory=list)
     require_separation_of_duties: bool = False
     cors_origins: Annotated[list[str], NoDecode] = Field(
         default_factory=lambda: ["http://127.0.0.1:3000"]
@@ -53,17 +72,13 @@ class Settings(BaseSettings):
     @classmethod
     def parse_cors_origins(cls, value: Any) -> Any:
         """Accept a JSON list or the comma-separated form used in .env.example."""
-        if isinstance(value, str):
-            text = value.strip()
-            if not text:
-                return []
-            if text.startswith("["):
-                parsed = json.loads(text)
-                if not isinstance(parsed, list):
-                    raise ValueError("cors_origins JSON must be a list")
-                return parsed
-            return [part.strip() for part in text.split(",") if part.strip()]
-        return value
+        return _parse_str_list(value, field="cors_origins")
+
+    @field_validator("oidc_approver_groups", mode="before")
+    @classmethod
+    def parse_approver_groups(cls, value: Any) -> Any:
+        """Accept a JSON list or the comma-separated form used in .env.example."""
+        return _parse_str_list(value, field="oidc_approver_groups")
 
     @field_validator("managed_targets", mode="before")
     @classmethod
@@ -193,6 +208,14 @@ class Settings(BaseSettings):
             # application on the same issuer, and one with no verifier accepts
             # everything. Refuse the configuration in every environment.
             raise ValueError("NIGHTJAR_OIDC_AUDIENCE is required when NIGHTJAR_OIDC_ISSUER is set")
+        if self.oidc_approver_groups and not self.oidc_issuer:
+            # Groups only exist in a verified token. Configuring them without OIDC
+            # would leave every approval refused, which is a lockout wearing the
+            # costume of a policy.
+            raise ValueError(
+                "NIGHTJAR_OIDC_APPROVER_GROUPS requires NIGHTJAR_OIDC_ISSUER: "
+                "the shared token carries no group claim"
+            )
         if self.environment != "production":
             return self
         problems: list[str] = []
