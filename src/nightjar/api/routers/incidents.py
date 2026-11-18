@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import asyncio
 import json
+import time
 from collections.abc import AsyncIterator
+from contextlib import AsyncExitStack
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -10,11 +12,16 @@ from fastapi.responses import StreamingResponse
 
 from nightjar.api import schemas
 from nightjar.api.deps import actor, get_service, require_auth
+from nightjar.api.notify import TimelineHub, TimelineWatch
 from nightjar.api.repository import CaseFile, ConflictError, NotFoundError
 from nightjar.api.service import IncidentService
 from nightjar.core.enums import ActionStatus, IncidentStatus
 from nightjar.core.ids import utcnow
 from nightjar.core.models import Incident
+
+# SSE comments keep proxies and the browser from closing an idle stream. Fifteen
+# seconds is under the usual 60 s idle timeout with room for a slow network.
+KEEPALIVE_SECONDS = 15.0
 
 router = APIRouter(
     prefix="/v1/incidents",
@@ -223,27 +230,46 @@ async def stream_timeline(
     service: Annotated[IncidentService, Depends(get_service)],
     after_seq: int = Query(default=0, ge=0),
 ) -> StreamingResponse:
+    """Server-sent timeline events for one case.
+
+    A write to the timeline wakes this stream through PostgreSQL ``LISTEN``/
+    ``NOTIFY``, so the usual latency is the round trip rather than the polling
+    interval. Polling is kept as the fallback: ``sse_poll_seconds`` is how long
+    the stream waits before reading the table anyway, which covers a listener that
+    has not attached, a dropped connection, or a database where notifications are
+    unavailable. A missed notification costs latency, never an event.
+    """
     await _ensure_incident(service, incident_id)
+    settings = request.app.state.settings
+    hub: TimelineHub | None = getattr(request.app.state, "timeline_hub", None)
 
     async def generate() -> AsyncIterator[str]:
         last = after_seq
-        idle = 0
-        while True:
-            if await request.is_disconnected():
-                return
-            events = await service.repo.list_timeline(incident_id, after_seq=last)
-            if events:
-                idle = 0
-                for event in events:
-                    last = event.seq
-                    payload = json.dumps(event.model_dump(mode="json"), default=str)
-                    yield f"id: {event.seq}\nevent: timeline\ndata: {payload}\n\n"
-            else:
-                idle += 1
-                if idle >= 10:
-                    idle = 0
+        last_keepalive = time.monotonic()
+        async with AsyncExitStack() as stack:
+            watch: TimelineWatch | None = (
+                await stack.enter_async_context(hub.watch(incident_id)) if hub is not None else None
+            )
+            while True:
+                if await request.is_disconnected():
+                    return
+                # Sampled before the read: a notification that arrives while the
+                # query runs is then detected instead of waiting for the poll.
+                seen = watch.seen if watch is not None else 0
+                events = await service.repo.list_timeline(incident_id, after_seq=last)
+                if events:
+                    for event in events:
+                        last = event.seq
+                        payload = json.dumps(event.model_dump(mode="json"), default=str)
+                        yield f"id: {event.seq}\nevent: timeline\ndata: {payload}\n\n"
+                    continue
+                if time.monotonic() - last_keepalive >= KEEPALIVE_SECONDS:
+                    last_keepalive = time.monotonic()
                     yield ": keep-alive\n\n"
-            await asyncio.sleep(1)
+                if watch is not None:
+                    await watch.wait(seen, seconds=settings.sse_poll_seconds)
+                else:
+                    await asyncio.sleep(settings.sse_poll_seconds)
 
     return StreamingResponse(
         generate(),

@@ -243,6 +243,16 @@ deliberately process-local and documented as such: the default is sized below wh
 one replica can serve, and a shared limiter is separate work. Connector budgets
 protect providers; this one protects Nightjar.
 
+Case-file streams are woken rather than polled. `_append_event_in_session` emits
+`pg_notify` in the transaction that appends the timeline event, so PostgreSQL
+delivers it on commit and drops it on rollback — a reader woken by a notification
+always finds the row it was woken for. `api/notify.py` holds one listening
+connection per process (a dropped connection is detected by a heartbeat and
+re-established) and fans each payload out to the streams watching that incident.
+The stream still reads the table every `NIGHTJAR_SSE_POLL_SECONDS`, which covers a
+listener that has not attached and a database where notifications are off: a
+missed notification costs latency, never an event.
+
 Per-incident work is serialized across processes with PostgreSQL session-level
 advisory locks on a dedicated connection (a `NullPool` engine, because a pooled
 connection commit would silently drop the lock). The stability scheduler takes a

@@ -155,6 +155,9 @@ def settings(database_url: str, lab_url: str) -> Settings:
         # The API budget has its own tests; the rest of the suite makes far more
         # requests than a real caller would and should not be throttled by it.
         api_rate_limit_enabled=False,
+        # Same for the timeline listener: it has its own tests, and every other
+        # test should not open a second database connection.
+        sse_notify_enabled=False,
     )
 
 

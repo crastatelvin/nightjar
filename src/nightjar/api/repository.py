@@ -11,9 +11,10 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from nightjar.api.notify import NOTIFY_SQL, TIMELINE_CHANNEL
 from nightjar.api.tables import (
     ActionRow,
     AgentRunRow,
@@ -427,6 +428,12 @@ class Repository:
                 prev_hash=event.prev_hash,
                 hash=event.hash,
             )
+        )
+        # Delivered when this transaction commits, so a reader woken by it always
+        # finds the row: PostgreSQL drops notifications from aborted work. One
+        # channel for every incident, narrowed by the payload.
+        await session.execute(
+            text(NOTIFY_SQL), {"channel": TIMELINE_CHANNEL, "payload": incident_id}
         )
         return event
 

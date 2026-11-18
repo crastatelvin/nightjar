@@ -257,13 +257,24 @@ match.
 
 ### `GET /v1/incidents/{id}/stream`
 
-Server-Sent Events stream of case-file snapshots. Reconnects are supported; the
-client should seed from `after_seq` and reconcile by incident id.
+Server-Sent Events, one `timeline` event per entry:
 
-Event names:
+```
+id: 12
+event: timeline
+data: {"id": "01a1…", "seq": 12, "event_type": "action.completed", …}
+```
 
-- `case` — full case file snapshot
-- `error` — stream failure
+Seed with `?after_seq=N` after loading the case normally; each event's `id` is its
+`seq`, so a reconnect resumes without gaps. A `: keep-alive` comment is sent after
+15 seconds of silence so proxies do not close an idle stream.
+
+A committed write to the timeline wakes every open stream on that incident through
+PostgreSQL `LISTEN`/`NOTIFY`, so the usual latency is the round trip rather than
+the poll interval. The stream also reads the table every
+`NIGHTJAR_SSE_POLL_SECONDS` (default 5) as a fallback: with
+`NIGHTJAR_SSE_NOTIFY_ENABLED=false`, or while a dropped listener reconnects, an
+event is delayed, never lost.
 
 ### `POST /v1/incidents/{id}/notes`
 
@@ -345,6 +356,8 @@ incident. Nothing executes on rejection.
 | `NIGHTJAR_API_RATE_LIMIT_BURST` | Largest back-to-back burst per caller (default 60) |
 | `NIGHTJAR_API_TRUST_FORWARDED_FOR` | Key callers by the last `X-Forwarded-For` entry (default false) |
 | `NIGHTJAR_API_MAX_BODY_BYTES` | Largest accepted request body (default 1048576) |
+| `NIGHTJAR_SSE_NOTIFY_ENABLED` | Wake case-file streams from `LISTEN`/`NOTIFY` (default true) |
+| `NIGHTJAR_SSE_POLL_SECONDS` | Fallback read interval for an open stream (default 5) |
 | `NIGHTJAR_CORS_ORIGINS` | Comma-separated browser origins |
 | `NIGHTJAR_ORCHESTRATOR` | `inline` (default) or `temporal` |
 | `NIGHTJAR_STABILITY_SECONDS` | Stability window after T+0 |

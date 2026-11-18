@@ -21,6 +21,7 @@ from nightjar.api.middleware import (
     RequestContextMiddleware,
     build_log_config,
 )
+from nightjar.api.notify import TimelineHub
 from nightjar.api.replay import PostgresReplayStore
 from nightjar.api.repository import ConflictError, NotFoundError, Repository
 from nightjar.api.routers import approvals, health, incidents, intake, meta
@@ -71,9 +72,14 @@ def create_app(
         scheduler = asyncio.create_task(
             _scheduler_loop(service, lock_engine), name="nightjar-stability"
         )
+        hub = api.state.timeline_hub
+        if hub is not None:
+            await hub.start()
         try:
             yield
         finally:
+            if hub is not None:
+                await hub.stop()
             scheduler.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await scheduler
@@ -114,6 +120,9 @@ def create_app(
         db.get_session_factory,
         tenant_id=resolved.tenant_id,
         ttl_seconds=max(resolved.intake_webhook_tolerance_seconds * 2, 600),
+    )
+    api.state.timeline_hub = (
+        TimelineHub(resolved.database_url) if resolved.sse_notify_enabled else None
     )
 
     api.add_middleware(BodySizeLimitMiddleware, max_bytes=resolved.api_max_body_bytes)

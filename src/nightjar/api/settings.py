@@ -153,6 +153,12 @@ class Settings(BaseSettings):
     intake_webhook_tolerance_seconds: int = 300
     intake_max_body_bytes: int = 65_536
 
+    # Case-file streams wake on PostgreSQL LISTEN/NOTIFY instead of polling. The
+    # poll interval is the fallback when the listener has not attached yet or the
+    # database cannot notify; a missed notification costs latency, never an event.
+    sse_notify_enabled: bool = True
+    sse_poll_seconds: float = Field(default=5.0, ge=0.25)
+
     # Targets the agent may touch, keyed by provider. Policy denies anything
     # outside this list, so a prompt-injected plan cannot name its own zone,
     # repository, mailbox, project, or app. Required in production.

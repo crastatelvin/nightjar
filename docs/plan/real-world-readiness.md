@@ -1215,8 +1215,8 @@ shipped: Google Workspace (6.9) and Microsoft 365 (6.10).
 
 ### Phase 7 — Multi-process and auth (P0)
 
-Status: 7.1, 7.2, 7.3, and 7.5 are shipped. 7.4 ships separation of duties;
-group-to-role mapping is still open. 7.6 is open.
+Status: 7.1, 7.2, 7.3, 7.5, and 7.6 are shipped. 7.4 ships separation of duties;
+group-to-role mapping is still open.
 
 | ID | Task | Files | Acceptance | Est |
 |---|---|---|---|---|
@@ -1225,7 +1225,7 @@ group-to-role mapping is still open. 7.6 is open.
 | 7.3 ✅ | OIDC JWT auth + JWKS cache | `api/auth.py`, `api/deps.py`, `tests/test_auth.py` | valid token → subject; expired/forged → 403 | 12 |
 | 7.4 ◐ | Separation of duties shipped; group-to-role mapping open | `api/auth.py`, `api/service.py`, `tests/test_separation_of_duties.py` | reporter cannot approve own R2 | 6 |
 | 7.5 ✅ | Rate limiting + body caps + request IDs | `api/middleware.py`, `api/ratelimit.py`, tests | 429 after budget; 413 over cap | 8 |
-| 7.6 | SSE via `LISTEN/NOTIFY` with poll fallback | `api/repository.py`, `api/routers/incidents.py`, tests | p95 < 150 ms | 8 |
+| 7.6 ✅ | SSE via `LISTEN/NOTIFY` with poll fallback | `api/notify.py`, `api/repository.py`, `api/routers/incidents.py`, tests | p95 < 150 ms | 8 |
 
 **Phase 7 total: ~44 h.**
 
