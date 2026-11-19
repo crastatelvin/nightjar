@@ -67,6 +67,13 @@ from nightjar.core.policy import LocalPolicyEngine, PolicyContext, PolicyEngine,
 from nightjar.core.redaction import redact_secrets, redact_secrets_obj, redact_text
 from nightjar.core.secrets import EnvVault
 from nightjar.core.targets import normalize_managed_targets, resolve_target
+from nightjar.core.telemetry import (
+    ACTION_TOTAL,
+    LOCK_BUSY_TOTAL,
+    VERIFICATION_TOTAL,
+    SpanHandle,
+    Telemetry,
+)
 from nightjar.core.verification import ConnectorCheck, CredentialCheck, Verifier
 
 log = logging.getLogger(__name__)
@@ -112,11 +119,13 @@ class IncidentService:
         policy: PolicyEngine | None = None,
         verifier: Verifier | None = None,
         lock_engine: AsyncEngine | None = None,
+        telemetry: Telemetry | None = None,
     ) -> None:
         self.settings = settings
         self.repo = repository
         self.runtime = runtime
         self.registry = registry
+        self.telemetry = telemetry or Telemetry()
         self.policy = policy or LocalPolicyEngine()
         self.verifier = verifier or Verifier(
             checks={
@@ -280,6 +289,7 @@ class IncidentService:
         try:
             await self.run_pipeline(incident_id)
         except LockBusy:
+            self.telemetry.count(LOCK_BUSY_TOTAL, scope="incident")
             log.info("incident %s is already being handled by another process", incident_id)
 
     async def _run_pipeline_locked(self, incident_id: str) -> None:
@@ -777,119 +787,22 @@ class IncidentService:
                 ActionStatus.ATTESTED,
             }:
                 continue
-            manual = self.registry.manual_step(action)
-            if manual is not None:
-                # No mutation happens here. The provider has no API for it, so
-                # Nightjar records the human step and refuses to resolve until
-                # the verification predicate passes.
-                execution = await self.repo.record_execution_start(
-                    incident_id,
-                    action,
-                    before_state={"action": action.action_type.value, "target": action.target},
+            provider = self._provider_name(action)
+            with self.telemetry.span(
+                "nightjar.action",
+                incident_id=incident_id,
+                action_type=action.action_type.value,
+                provider=provider,
+                target=action.target,
+                risk=action.risk.value,
+            ) as span:
+                continues, is_manual = await self._execute_one(
+                    incident_id, plan, action, provider, span
                 )
-                await self.repo.record_execution_finish(
-                    execution.id,
-                    status=ActionStatus.AWAITING_MANUAL,
-                    after_state=manual.as_dict(),
-                )
-                await self.repo.set_action_status(action.id, ActionStatus.AWAITING_MANUAL)
-                await self.repo.append_event(
-                    incident_id,
-                    EventType.MANUAL_STEP_REQUIRED,
-                    actor="executor",
-                    payload={
-                        "action_id": action.id,
-                        "action_type": action.action_type.value,
-                        "manual": manual.as_dict(),
-                    },
-                )
+            if is_manual:
                 manual_actions.append(action)
-                continue
-            key = action_key(incident_id, plan.id, action)
-            replay = await self.repo.find_execution_by_key(key)
-            if replay is not None:
-                # This exact mutation already succeeded in this plan. A second
-                # approval decision or a retried worker must not do it again.
-                await self.repo.set_action_status(action.id, ActionStatus.EXECUTED)
-                await self.repo.append_event(
-                    incident_id,
-                    EventType.ACTION_REPLAYED,
-                    actor="executor",
-                    payload={
-                        "action_id": action.id,
-                        "action_type": action.action_type.value,
-                        "idempotency_key": key,
-                        "replay_of": replay.id,
-                        "result": replay.after_state,
-                    },
-                )
-                continue
-            execution = await self.repo.record_execution_start(
-                incident_id,
-                action,
-                before_state={"action": action.action_type.value, "target": action.target},
-                idempotency_key=key,
-            )
-            await self.repo.set_action_status(action.id, ActionStatus.EXECUTING)
-            await self.repo.append_event(
-                incident_id,
-                EventType.ACTION_STARTED,
-                actor="executor",
-                payload={
-                    "action_id": action.id,
-                    "action_type": action.action_type.value,
-                    "target": action.target,
-                    "execution_id": execution.id,
-                },
-            )
-
-            async def _run(action: ActionSpec = action) -> dict[str, Any]:
-                return await self.registry.execute(action)
-
-            try:
-                result, attempts = await call_with_retries(
-                    _run,
-                    attempts=self.settings.connector_max_attempts,
-                    max_wait=self.settings.connector_retry_max_wait_seconds,
-                )
-            except Exception as exc:
-                detail = exc.as_dict() if isinstance(exc, ConnectorError) else {"message": str(exc)}
-                await self.repo.record_execution_finish(
-                    execution.id,
-                    status=ActionStatus.FAILED,
-                    after_state={"error": detail},
-                    error=str(exc),
-                )
-                await self.repo.set_action_status(action.id, ActionStatus.FAILED)
-                await self.repo.append_event(
-                    incident_id,
-                    EventType.ACTION_FAILED,
-                    actor="executor",
-                    payload={"action_id": action.id, "error": str(exc), "detail": detail},
-                )
-                await self._fail(incident_id, f"action {action.action_type.value} failed: {exc}")
+            if not continues:
                 return
-            await self.repo.record_execution_finish(
-                execution.id,
-                status=ActionStatus.EXECUTED,
-                after_state=result,
-            )
-            await self.repo.set_action_status(action.id, ActionStatus.EXECUTED)
-            payload: dict[str, Any] = {
-                "action_id": action.id,
-                "action_type": action.action_type.value,
-                "result": result,
-            }
-            if attempts:
-                # A success after a retry is worth recording: the provider was
-                # flaky, and the operator should be able to see that.
-                payload["attempts"] = [attempt.as_dict() for attempt in attempts]
-            await self.repo.append_event(
-                incident_id,
-                EventType.ACTION_COMPLETED,
-                actor="executor",
-                payload=payload,
-            )
         if manual_actions:
             await self._set_status(
                 incident,
@@ -899,6 +812,168 @@ class IncidentService:
             )
             return
         await self._verify(incident_id, phase="t0")
+
+    def _provider_name(self, action: ActionSpec) -> str:
+        """The connector that will run this action, or ``unbound``.
+
+        A span attribute is not a place to raise: an action that policy denied, or
+        one whose connector is ambiguous, still gets a span, labelled honestly.
+        """
+        try:
+            return self.registry.connector_for(action).name
+        except ConnectorError:
+            return "unbound"
+
+    async def _execute_one(
+        self,
+        incident_id: str,
+        plan: ActionPlan,
+        action: ActionSpec,
+        provider: str,
+        span: SpanHandle,
+    ) -> tuple[bool, bool]:
+        """One action, and whether the plan continues and whether it was manual."""
+        manual = self.registry.manual_step(action)
+        if manual is not None:
+            # No mutation happens here. The provider has no API for it, so
+            # Nightjar records the human step and refuses to resolve until
+            # the verification predicate passes.
+            execution = await self.repo.record_execution_start(
+                incident_id,
+                action,
+                before_state={"action": action.action_type.value, "target": action.target},
+            )
+            await self.repo.record_execution_finish(
+                execution.id,
+                status=ActionStatus.AWAITING_MANUAL,
+                after_state=manual.as_dict(),
+            )
+            await self.repo.set_action_status(action.id, ActionStatus.AWAITING_MANUAL)
+            await self.repo.append_event(
+                incident_id,
+                EventType.MANUAL_STEP_REQUIRED,
+                actor="executor",
+                payload={
+                    "action_id": action.id,
+                    "action_type": action.action_type.value,
+                    "manual": manual.as_dict(),
+                },
+            )
+            span.set(outcome="manual")
+            self.telemetry.count(
+                ACTION_TOTAL,
+                provider=provider,
+                action=action.action_type.value,
+                outcome="manual",
+            )
+            return True, True
+        key = action_key(incident_id, plan.id, action)
+        replay = await self.repo.find_execution_by_key(key)
+        if replay is not None:
+            # This exact mutation already succeeded in this plan. A second
+            # approval decision or a retried worker must not do it again.
+            await self.repo.set_action_status(action.id, ActionStatus.EXECUTED)
+            await self.repo.append_event(
+                incident_id,
+                EventType.ACTION_REPLAYED,
+                actor="executor",
+                payload={
+                    "action_id": action.id,
+                    "action_type": action.action_type.value,
+                    "idempotency_key": key,
+                    "replay_of": replay.id,
+                    "result": replay.after_state,
+                },
+            )
+            span.set(outcome="replayed")
+            self.telemetry.count(
+                ACTION_TOTAL,
+                provider=provider,
+                action=action.action_type.value,
+                outcome="replayed",
+            )
+            return True, False
+        execution = await self.repo.record_execution_start(
+            incident_id,
+            action,
+            before_state={"action": action.action_type.value, "target": action.target},
+            idempotency_key=key,
+        )
+        await self.repo.set_action_status(action.id, ActionStatus.EXECUTING)
+        await self.repo.append_event(
+            incident_id,
+            EventType.ACTION_STARTED,
+            actor="executor",
+            payload={
+                "action_id": action.id,
+                "action_type": action.action_type.value,
+                "target": action.target,
+                "execution_id": execution.id,
+            },
+        )
+
+        async def _run(action: ActionSpec = action) -> dict[str, Any]:
+            return await self.registry.execute(action)
+
+        try:
+            result, attempts = await call_with_retries(
+                _run,
+                attempts=self.settings.connector_max_attempts,
+                max_wait=self.settings.connector_retry_max_wait_seconds,
+            )
+        except Exception as exc:
+            detail = exc.as_dict() if isinstance(exc, ConnectorError) else {"message": str(exc)}
+            await self.repo.record_execution_finish(
+                execution.id,
+                status=ActionStatus.FAILED,
+                after_state={"error": detail},
+                error=str(exc),
+            )
+            await self.repo.set_action_status(action.id, ActionStatus.FAILED)
+            await self.repo.append_event(
+                incident_id,
+                EventType.ACTION_FAILED,
+                actor="executor",
+                payload={"action_id": action.id, "error": str(exc), "detail": detail},
+            )
+            await self._fail(incident_id, f"action {action.action_type.value} failed: {exc}")
+            span.set(outcome="failed", error=type(exc).__name__)
+            self.telemetry.count(
+                ACTION_TOTAL,
+                provider=provider,
+                action=action.action_type.value,
+                outcome="failed",
+            )
+            return False, False
+        await self.repo.record_execution_finish(
+            execution.id,
+            status=ActionStatus.EXECUTED,
+            after_state=result,
+        )
+        await self.repo.set_action_status(action.id, ActionStatus.EXECUTED)
+        payload: dict[str, Any] = {
+            "action_id": action.id,
+            "action_type": action.action_type.value,
+            "result": result,
+        }
+        if attempts:
+            # A success after a retry is worth recording: the provider was
+            # flaky, and the operator should be able to see that.
+            payload["attempts"] = [attempt.as_dict() for attempt in attempts]
+        await self.repo.append_event(
+            incident_id,
+            EventType.ACTION_COMPLETED,
+            actor="executor",
+            payload=payload,
+        )
+        span.set(outcome="executed", attempts=len(attempts))
+        self.telemetry.count(
+            ACTION_TOTAL,
+            provider=provider,
+            action=action.action_type.value,
+            outcome="executed",
+        )
+        return True, False
 
     # ---------------------------------------------------------------- approvals
     async def decide_approval(
@@ -1083,7 +1158,24 @@ class IncidentService:
                     )
                 }
             )
-            result = await self.verifier.run(resolved, incident_id=incident_id, action_id=action_id)
+            with self.telemetry.span(
+                "nightjar.verification",
+                incident_id=incident_id,
+                predicate_id=predicate.id,
+                kind=predicate.kind.value,
+                required=predicate.required,
+                phase=phase,
+            ) as span:
+                result = await self.verifier.run(
+                    resolved, incident_id=incident_id, action_id=action_id
+                )
+                span.set(passed=result.passed, error=result.error)
+            self.telemetry.count(
+                VERIFICATION_TOTAL,
+                kind=predicate.kind.value,
+                required=predicate.required,
+                passed=result.passed,
+            )
             result.phase = phase
             result.required = predicate.required
             await self.repo.record_verification(result, phase=phase, required=predicate.required)
@@ -1191,6 +1283,7 @@ class IncidentService:
                         log.exception("stability verification failed for %s", incident_id)
                         await self._fail(incident_id, "stability verification crashed")
             except LockBusy:
+                self.telemetry.count(LOCK_BUSY_TOTAL, scope="scheduler")
                 continue
         return checked
 

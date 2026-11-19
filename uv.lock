@@ -1021,6 +1021,8 @@ anthropic = [
 ]
 dev = [
     { name = "mypy" },
+    { name = "opentelemetry-exporter-otlp-proto-http" },
+    { name = "opentelemetry-sdk" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
     { name = "respx" },
@@ -1043,7 +1045,9 @@ requires-dist = [
     { name = "itsdangerous", specifier = ">=2.2,<3" },
     { name = "jsonschema", specifier = ">=4.24,<5" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.19,<2" },
+    { name = "opentelemetry-exporter-otlp-proto-http", marker = "extra == 'dev'", specifier = ">=1.45,<2" },
     { name = "opentelemetry-exporter-otlp-proto-http", marker = "extra == 'otel'", specifier = ">=1.45,<2" },
+    { name = "opentelemetry-sdk", marker = "extra == 'dev'", specifier = ">=1.45,<2" },
     { name = "opentelemetry-sdk", marker = "extra == 'otel'", specifier = ">=1.45,<2" },
     { name = "pydantic", specifier = ">=2.14,<3" },
     { name = "pydantic-ai-slim", extras = ["anthropic"], marker = "extra == 'anthropic'", specifier = ">=2.66,<3" },

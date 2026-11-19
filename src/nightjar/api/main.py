@@ -31,12 +31,13 @@ from nightjar.connectors.registry import build_registry
 from nightjar.core.actions import ActionValidationError
 from nightjar.core.enums import PredicateKind
 from nightjar.core.policy import LocalPolicyEngine, OpaPolicyEngine
+from nightjar.core.telemetry import Telemetry
 from nightjar.core.verification import ConnectorCheck, Verifier
 
 log = logging.getLogger(__name__)
 
 
-def build_service(settings: Settings) -> IncidentService:
+def build_service(settings: Settings, *, telemetry: Telemetry | None = None) -> IncidentService:
     db.configure(settings.database_url, echo=settings.db_echo)
     repository = Repository(db.get_session_factory())
     runtime = build_runtime(settings)
@@ -54,6 +55,7 @@ def build_service(settings: Settings) -> IncidentService:
         policy=policy,
         verifier=verifier,
         lock_engine=db.get_lock_engine(),
+        telemetry=telemetry or Telemetry.from_settings(settings),
     )
 
 
@@ -84,6 +86,7 @@ def create_app(
             with contextlib.suppress(asyncio.CancelledError):
                 await scheduler
             await service.shutdown()
+            service.telemetry.shutdown()
             await db.dispose()
 
     api = FastAPI(

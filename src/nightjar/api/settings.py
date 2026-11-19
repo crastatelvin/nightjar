@@ -183,6 +183,10 @@ class Settings(BaseSettings):
 
     otel_enabled: bool = False
     otel_endpoint: str | None = None
+    otel_service_name: str = "nightjar"
+    # A ratio, not a count: 1.0 keeps every trace, which is right for a small
+    # deployment where the point is being able to explain what happened.
+    otel_sample_ratio: float = Field(default=1.0, gt=0.0, le=1.0)
 
     @model_validator(mode="after")
     def _refuse_unsafe_production(self) -> Settings:
@@ -198,6 +202,13 @@ class Settings(BaseSettings):
             self.microsoft_client_id,
             self.microsoft_client_secret,
         ]
+        if self.otel_enabled and not self.otel_endpoint:
+            # The SDK would default to localhost, which silently exports nowhere
+            # from a container. Demand the destination instead of guessing.
+            raise ValueError(
+                "NIGHTJAR_OTEL_ENABLED requires NIGHTJAR_OTEL_ENDPOINT, "
+                "for example http://127.0.0.1:4318"
+            )
         if any(configured) and not all(configured):
             raise ValueError(
                 "Microsoft 365 needs NIGHTJAR_MICROSOFT_TENANT_ID, "

@@ -9,6 +9,7 @@ from nightjar.api.settings import Settings
 from nightjar.connectors.registry import build_registry
 from nightjar.core.capabilities import V1_CLASSES, DoctorReport, assess
 from nightjar.core.enums import IncidentClass
+from nightjar.core.telemetry import DOCTOR_VERDICT_TOTAL, Telemetry
 
 
 def add_parser(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
@@ -46,12 +47,19 @@ async def _doctor(args: argparse.Namespace) -> DoctorReport:
     classes: tuple[IncidentClass, ...] = (
         tuple(IncidentClass(value) for value in args.classes) if args.classes else V1_CLASSES
     )
-    return assess(
+    report = assess(
         registry.connectors,
         list(reports),
         environment=settings.environment,
         classes=classes,
     )
+    # A verdict is a fact about a moment, not about a provider forever: exporting
+    # it is what lets a dashboard show "the CDN has been degraded since Tuesday".
+    telemetry = Telemetry.from_settings(settings)
+    for item in report.providers:
+        telemetry.count(DOCTOR_VERDICT_TOTAL, provider=item.provider, verdict=item.verdict)
+    telemetry.shutdown()
+    return report
 
 
 def _render(report: DoctorReport) -> str:

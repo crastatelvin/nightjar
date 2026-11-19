@@ -1188,15 +1188,23 @@ independent manual check, how to undo the fix, and what "resolved" actually
 requires. `tests/test_docs.py` resolves every relative link in the documentation so
 a runbook cannot point at a file that moved.
 
-### 12.4 Observability
+### 12.4 ✅ Observability
 
-- OTel spans per action and per predicate, with `incident_id`, `action_type`,
-  `provider`, `outcome`.
+`core/telemetry.py` wraps the SDK so the base install has no OTel dependency and
+every call is a no-op; enabling it without the `otel` extra or without an endpoint
+is a startup error rather than a silently empty dashboard.
+
+- `nightjar.action` spans with `incident_id`, `action_type`, `provider`, `target`,
+  `risk`, `outcome` (`executed`, `replayed`, `manual`, `failed`), `attempts`, `error`.
+- `nightjar.verification` spans with `predicate_id`, `kind`, `required`, `phase`,
+  `passed`.
 - Metrics: `nightjar_action_total{provider,action,outcome}`,
-  `nightjar_verification_total{kind,passed}`, `nightjar_lock_busy_total`,
-  `nightjar_doctor_verdict{provider}`.
-- SLOs: action p95 < 5 s (excluding propagation), verification p95 < 10 s,
-  stream latency p95 < 150 ms.
+  `nightjar_verification_total{kind,required,passed}`, `nightjar_lock_busy_total{scope}`,
+  `nightjar_doctor_verdict{provider,verdict}`.
+- SLO table and a local-collector recipe in `docs/observability.md`; attributes are
+  an allowlist, so no prompt, evidence body, or credential value is exported.
+- Verified by `tests/test_telemetry.py`, including a full lab incident asserting the
+  spans exist with the right provider and outcome.
 
 ### 12.5 Compose smoke test
 
@@ -1277,7 +1285,7 @@ and approver groups are both enforced.
 | 9.1 ✅ | Backup/restore/verify scripts | `scripts/pg-backup.sh`, `scripts/pg-restore.sh`, `cli/ledger.py`, CI job, `docs/operations.md` | restore + chain valid | 8 |
 | 9.2 ✅ | Migration upgrade test | `tests/test_migrations.py` | empty → head per revision; data survives to head | 4 |
 | 9.3 ✅ | Runbooks (3 classes) | `docs/runbooks/` | operator can follow without source | 8 |
-| 9.4 | OTel spans + metrics + SLO doc | `core/telemetry.py`, docs | spans visible in a local collector | 10 |
+| 9.4 ✅ | OTel spans + metrics + SLO doc | `core/telemetry.py`, `docs/observability.md` | spans visible in a local collector | 10 |
 | 9.5 | Compose smoke test | CI job | incident filed and resolved | 6 |
 
 **Phase 9 total: ~36 h.**
