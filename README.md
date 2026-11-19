@@ -263,6 +263,8 @@ When the API enforces a token, add the UI origin to `NIGHTJAR_CORS_ORIGINS`
 
 - [Architecture](docs/architecture.md)
 - [API reference](docs/api.md)
+- [Operations: backup, restore, and ledger verification](docs/operations.md)
+- [Runbooks](docs/runbooks/) — site outage, exposed credential, phishing
 - [Evaluation](docs/evals.md)
 - [Real-world readiness plan](docs/plan/real-world-readiness.md) — provider
   endpoints, scopes, verification predicates, and the micro-task backlog to make

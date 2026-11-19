@@ -14,6 +14,9 @@ Two commands:
 | `scripts/pg-restore.sh` | restore into a new database, migrate, verify |
 | `nightjarctl verify-ledger` | recompute every chain in a database |
 
+When a case is live rather than a backup being taken, the operator-facing procedure
+is in [runbooks/](runbooks/).
+
 All three need the PostgreSQL client tools to match the server's major version.
 An older `pg_dump` refuses a newer server, which is the failure you want rather
 than a dump that silently omits syntax it does not understand. With the project

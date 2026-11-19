@@ -1177,11 +1177,16 @@ upgrade does not rewrite the ledger. There are no release tags yet, so the
 which is what a tag would point at anyway. Downgrade is not promised: forward-only
 with the restore path in `docs/operations.md`.
 
-### 12.3 Runbooks
+### 12.3 ✅ Runbooks
 
-`docs/runbooks/site-outage.md`, `exposed-credential.md`, `phishing.md`: what
-Nightjar does, what it will ask you to approve, what it cannot do, how to verify
-manually, how to roll back the rollback.
+`docs/runbooks/`: an index that covers the shared case lifecycle, approvals,
+attestation, the ledger, and what each failure symptom means, then
+`site-outage.md`, `exposed-credential.md`, and `phishing.md`. Each covers what
+Nightjar does without the operator, which actions need approval and what the
+verifier reads back, what the product cannot do and what to do instead, an
+independent manual check, how to undo the fix, and what "resolved" actually
+requires. `tests/test_docs.py` resolves every relative link in the documentation so
+a runbook cannot point at a file that moved.
 
 ### 12.4 Observability
 
@@ -1271,7 +1276,7 @@ and approver groups are both enforced.
 |---|---|---|---|---|
 | 9.1 ✅ | Backup/restore/verify scripts | `scripts/pg-backup.sh`, `scripts/pg-restore.sh`, `cli/ledger.py`, CI job, `docs/operations.md` | restore + chain valid | 8 |
 | 9.2 ✅ | Migration upgrade test | `tests/test_migrations.py` | empty → head per revision; data survives to head | 4 |
-| 9.3 | Runbooks (3 classes) | `docs/runbooks/` | operator can follow without source | 8 |
+| 9.3 ✅ | Runbooks (3 classes) | `docs/runbooks/` | operator can follow without source | 8 |
 | 9.4 | OTel spans + metrics + SLO doc | `core/telemetry.py`, docs | spans visible in a local collector | 10 |
 | 9.5 | Compose smoke test | CI job | incident filed and resolved | 6 |
 
