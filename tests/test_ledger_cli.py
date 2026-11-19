@@ -33,8 +33,13 @@ def _url_with_database(database_url: str, name: str) -> URL:
     return make_url(database_url).set(database=name)
 
 
+def _url_text(database_url: str, name: str) -> str:
+    """A URL with the password intact: ``str(URL)`` masks it, which CI needs."""
+    return _url_with_database(database_url, name).render_as_string(hide_password=False)
+
+
 def _admin_url(database_url: str) -> str:
-    return str(_url_with_database(database_url, "postgres"))
+    return _url_text(database_url, "postgres")
 
 
 async def _admin_exec(admin_dsn: str, sql: str) -> None:
@@ -65,7 +70,7 @@ async def _truncate(database_url: str) -> None:
 def ledger_db(database_url: str) -> Iterator[str]:
     """A scratch database, so tampering here never touches another test's rows."""
     name = f"nightjar_ledger_{uuid.uuid4().hex[:8]}"
-    url = str(_url_with_database(database_url, name))
+    url = _url_text(database_url, name)
 
     async def create_schema() -> None:
         engine = create_async_engine(url)

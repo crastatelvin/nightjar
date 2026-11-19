@@ -81,10 +81,18 @@ def _query(sql: str, database_url: str) -> str:
     return result.stdout.strip()
 
 
+def _url_text(database_url: str, *, database: str | None = None) -> str:
+    """A URL with the password intact: ``str(URL)`` masks it, which CI needs."""
+    parsed = make_url(database_url)
+    if database is not None:
+        parsed = parsed.set(database=database)
+    return parsed.render_as_string(hide_password=False)
+
+
 def _create_database(database_url: str, name: str) -> str:
     result = _admin(f'CREATE DATABASE "{name}"', database_url)
     assert result.returncode == 0, result.stderr
-    return str(make_url(database_url).set(database=name))
+    return _url_text(database_url, database=name)
 
 
 def _drop_database(database_url: str, name: str) -> None:
@@ -143,14 +151,36 @@ class Source:
     manifest_data: dict[str, object]
 
 
-@pytest.fixture(scope="module")
-def source(database_url: str, tmp_path_factory: pytest.TempPathFactory) -> Iterator[Source]:
+def _pg_client_major() -> int:
+    result = _run(["pg_dump", "--version"])
+    assert result.returncode == 0, result.stderr
+    return int(result.stdout.split()[-1].split(".")[0])
+
+
+def _server_major(database_url: str) -> int:
+    return int(_query("show server_version_num", database_url)) // 10000
+
+
+@pytest.fixture(scope="module", autouse=True)
+def _matching_client(database_url: str) -> None:
     for tool in ("psql", "pg_dump", "pg_restore"):
         if shutil.which(tool) is None:
             pytest.skip(f"{tool} is not installed")
     if not ALEMBIC.exists():
         pytest.skip("alembic is not installed in this environment")
 
+    # pg_dump refuses a server newer than itself, which is correct behaviour and
+    # also means this drill needs a matching client. The `backup and restore` CI
+    # job installs one; the general test job is allowed to skip instead of failing
+    # on whatever client the runner image happens to ship.
+    client = _pg_client_major()
+    server = _server_major(database_url)
+    if client != server:
+        pytest.skip(f"pg_dump {client} cannot dump a server {server}")
+
+
+@pytest.fixture(scope="module")
+def source(database_url: str, tmp_path_factory: pytest.TempPathFactory) -> Iterator[Source]:
     name = f"nightjar_backup_src_{uuid.uuid4().hex[:8]}"
     created = _create_database(database_url, name)
     try:
@@ -207,7 +237,7 @@ def test_the_manifest_records_what_the_dump_contains(source: Source) -> None:
 
 def test_a_restored_database_verifies(source: Source, database_url: str) -> None:
     name = f"nightjar_restore_{uuid.uuid4().hex[:8]}"
-    target = str(make_url(database_url).set(database=name))
+    target = _url_text(database_url, database=name)
     try:
         result = _run([str(RESTORE), str(source.dump), "--database-url", target])
         assert result.returncode == 0, result.stdout + result.stderr
@@ -250,7 +280,7 @@ def test_a_tampered_dump_is_refused_before_anything_is_created(
     shutil.copy(source.manifest, tmp_path / "nightjar-tampered.json")
 
     name = f"nightjar_tamper_{uuid.uuid4().hex[:8]}"
-    target = str(make_url(database_url).set(database=name))
+    target = _url_text(database_url, database=name)
     result = _run([str(RESTORE), str(tampered), "--database-url", target])
     try:
         assert result.returncode != 0
@@ -267,7 +297,7 @@ def test_an_existing_database_is_not_overwritten_without_force(
     source: Source, database_url: str
 ) -> None:
     name = f"nightjar_existing_{uuid.uuid4().hex[:8]}"
-    target = str(make_url(database_url).set(database=name))
+    target = _url_text(database_url, database=name)
     _create_database(database_url, name)
     try:
         refused = _run([str(RESTORE), str(source.dump), "--database-url", target])
@@ -284,7 +314,7 @@ def test_an_existing_database_is_not_overwritten_without_force(
 
 def test_an_unverified_restore_says_so(source: Source, database_url: str) -> None:
     name = f"nightjar_unverified_{uuid.uuid4().hex[:8]}"
-    target = str(make_url(database_url).set(database=name))
+    target = _url_text(database_url, database=name)
     try:
         result = _run([str(RESTORE), str(source.dump), "--database-url", target, "--no-verify"])
         assert result.returncode == 0, result.stdout + result.stderr
@@ -304,7 +334,7 @@ def test_a_dump_without_a_manifest_is_refused(
             str(RESTORE),
             str(lonely),
             "--database-url",
-            str(make_url(database_url).set(database="nightjar_missing_manifest")),
+            _url_text(database_url, database="nightjar_missing_manifest"),
         ]
     )
     assert result.returncode != 0
