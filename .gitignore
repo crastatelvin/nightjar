@@ -22,3 +22,6 @@ htmlcov/
 
 # Generated evaluation reports are local artifacts.
 evals/reports/
+
+# Local database dumps written by scripts/pg-backup.sh. Never commit a ledger.
+backups/

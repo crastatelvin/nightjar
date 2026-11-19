@@ -4,7 +4,8 @@ import json
 
 import pytest
 
-from nightjar.cli.doctor import _render, main
+from nightjar.cli.doctor import _render
+from nightjar.cli.main import main
 from nightjar.connectors.base import CapabilityReport
 from nightjar.connectors.lab import LabConnector
 from nightjar.core.capabilities import assess

@@ -1147,15 +1147,23 @@ typed error recorded, no `RESOLVED`, no duplicate mutation, ledger valid.
 
 ## 12. Operational readiness
 
-### 12.1 Backup and restore
+### 12.1 ✅ Backup and restore
 
-`scripts/backup.sh`: `pg_dump --format=custom --no-owner`, timestamped, optional
-`age` encryption, retention count. `scripts/restore.sh`: restore into a scratch
-database. `scripts/verify-backup.sh`: restore, `alembic upgrade head`, run
-`verify_chains` over every incident, exit non-zero on any break.
+`scripts/pg-backup.sh`: `pg_dump --format=custom --compress=6 --no-owner`, written
+next to a JSON manifest holding the dump's SHA-256, byte count, git revision,
+Alembic head and schema revision, and row counts. The custom format has no
+checksum of its own, so the manifest is what makes a restore verifiable.
+`scripts/pg-restore.sh`: verify the manifest, refuse an existing database unless
+`--force`, `pg_restore --exit-on-error`, `alembic upgrade head`, then
+`nightjarctl verify-ledger` and a count comparison against the manifest. A third
+script was not needed: `nightjarctl verify-ledger` is the verifier, usable on its
+own against any database.
 
-CI job `backup-restore` seeds incidents, dumps, restores, and asserts chain
-validity. A checklist line is not enough for an audit ledger.
+CI job `backup and restore` migrates an empty database, seeds incidents, dumps,
+restores into a second database, asserts every chain and the manifest counts, and
+asserts that a dump with one flipped byte is refused before anything is created.
+A checklist line is not enough for an audit ledger; the operator-facing version is
+in `docs/operations.md`, including what a hash chain does and does not prove.
 
 ### 12.2 Migrations
 
@@ -1255,7 +1263,7 @@ and approver groups are both enforced.
 
 | ID | Task | Files | Acceptance | Est |
 |---|---|---|---|---|
-| 9.1 | Backup/restore/verify scripts | `scripts/*.sh`, CI job | restore + chain valid | 8 |
+| 9.1 ✅ | Backup/restore/verify scripts | `scripts/pg-backup.sh`, `scripts/pg-restore.sh`, `cli/ledger.py`, CI job, `docs/operations.md` | restore + chain valid | 8 |
 | 9.2 | Migration upgrade test | CI job | empty → head; prev tag → head | 4 |
 | 9.3 | Runbooks (3 classes) | `docs/runbooks/` | operator can follow without source | 8 |
 | 9.4 | OTel spans + metrics + SLO doc | `core/telemetry.py`, docs | spans visible in a local collector | 10 |

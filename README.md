@@ -324,6 +324,11 @@ Real and exercised end to end:
   functional check, a credential plan needs a predicate that presents the
   credential, and a phishing plan needs both containment checks; optional
   predicates never count;
+- a verified backup path: `scripts/pg-backup.sh` writes a checksummed dump and a
+  manifest of counts, git revision, and schema revision; `scripts/pg-restore.sh`
+  restores into a new database, migrates it, and proves every hash chain;
+  `nightjarctl verify-ledger` does the chain check on its own, and CI runs the whole
+  restore drill on every push ([docs/operations.md](docs/operations.md));
 - the API, SSE stream, UI, standalone image, and CI.
 
 Not yet real:
@@ -336,8 +341,9 @@ Not yet real:
   latency numbers are mock-only;
 - authentication is either one shared bearer token, where `x-nightjar-actor` is an
   audit label, or OIDC with a verified issuer, audience, and key set, where the actor
-  comes from the token and the header is ignored; group-to-role mapping and rate
-  limiting are not implemented;
+  comes from the token and the header is ignored; `NIGHTJAR_OIDC_APPROVER_GROUPS`
+  gates sign-off on group membership, and each caller has a per-process request
+  budget, but the budget is not shared across replicas yet;
 - separation of duties is opt-in (`NIGHTJAR_REQUIRE_SEPARATION_OF_DUTIES`), because a
   one-person operations team is the target deployment; with it on, the person who
   filed the incident cannot approve its remediation;

@@ -69,7 +69,9 @@ Use this before exposing a Nightjar deployment to a real organization. Items mar
 - [ ] **Required** Use a dedicated database role with no superuser and no access to
       other databases.
 - [ ] Enable encryption at rest and in transit.
-- [ ] Back up the database, and test restore. The ledger is the audit trail.
+- [ ] Back up the database with `scripts/pg-backup.sh`, and test restore with
+      `scripts/pg-restore.sh` on a schedule. The ledger is the audit trail, and the
+      restore is what proves the backup. See [operations](../operations.md).
 - [ ] Restrict write access to the Nightjar role; operators read through the API.
 - [ ] Verify `/v1/incidents/{id}/chain` returns `evidence_valid` and
       `timeline_valid` for recent incidents as part of monitoring.

@@ -91,6 +91,56 @@ jobs:
       - name: Local/Rego parity
         run: uv run pytest tests/test_policy.py -q
 
+  backup:
+    name: backup and restore
+    # Pinned to 24.04 rather than ubuntu-latest because this job installs the
+    # PostgreSQL 18 client from PGDG, and PGDG publishes for LTS releases. The
+    # client must match the server major: an older pg_dump refuses a newer server.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: nightjar
+          POSTGRES_PASSWORD: nightjar
+          POSTGRES_DB: nightjar_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U nightjar -d nightjar_test"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
+    env:
+      NIGHTJAR_TEST_DATABASE_URL: postgresql+asyncpg://nightjar:nightjar@127.0.0.1:5432/nightjar_test
+      NIGHTJAR_ENVIRONMENT: test
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install PostgreSQL 18 client
+        run: |
+          sudo install -d /usr/share/postgresql-common/pgdg
+          curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+            | sudo gpg --dearmor -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.gpg
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.gpg] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
+            | sudo tee /etc/apt/sources.list.d/pgdg.list
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client-18
+          echo "/usr/lib/postgresql/18/bin" >> "$GITHUB_PATH"
+          /usr/lib/postgresql/18/bin/pg_dump --version
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install
+        run: uv sync --extra dev
+
+      - name: Restore drill
+        run: uv run pytest tests/test_backup_restore.py tests/test_ledger_cli.py -q
+
   evals:
     name: CornerShop evaluation
     runs-on: ubuntu-latest

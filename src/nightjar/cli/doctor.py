@@ -3,8 +3,6 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
-import sys
-from collections.abc import Sequence
 
 from nightjar import __version__
 from nightjar.api.settings import Settings
@@ -13,14 +11,7 @@ from nightjar.core.capabilities import V1_CLASSES, DoctorReport, assess
 from nightjar.core.enums import IncidentClass
 
 
-def _parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
-        prog="nightjarctl",
-        description="Operate Nightjar: check what it can really do before an incident.",
-    )
-    parser.add_argument("--version", action="version", version=f"nightjar {__version__}")
-    sub = parser.add_subparsers(dest="command", required=True)
-
+def add_parser(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     doctor = sub.add_parser(
         "doctor",
         help="probe every configured provider and report what is missing",
@@ -43,7 +34,7 @@ def _parser() -> argparse.ArgumentParser:
         choices=[item.value for item in V1_CLASSES],
         help="only require the actions for this incident class (repeatable)",
     )
-    return parser
+    doctor.set_defaults(func=run)
 
 
 async def _doctor(args: argparse.Namespace) -> DoctorReport:
@@ -91,17 +82,10 @@ def _render(report: DoctorReport) -> str:
     return "\n".join(lines)
 
 
-def main(argv: Sequence[str] | None = None) -> int:
-    args = _parser().parse_args(argv)
-    if args.command != "doctor":  # pragma: no cover - argparse enforces this
-        return 2
+def run(args: argparse.Namespace) -> int:
     report = asyncio.run(_doctor(args))
     if args.json:
         print(json.dumps(report.as_dict(), indent=2, sort_keys=True))
     else:
         print(_render(report))
     return 0 if report.ok else 1
-
-
-if __name__ == "__main__":  # pragma: no cover
-    sys.exit(main())

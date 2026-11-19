@@ -282,6 +282,22 @@ class Repository:
                 raise NotFoundError(f"incident {incident_id} not found")
             return _incident(row)
 
+    async def list_all_incidents(self, *, limit: int = 200, offset: int = 0) -> list[Incident]:
+        """Every incident, regardless of tenant.
+
+        This is the one query that deliberately ignores the tenant filter: ledger
+        verification is an operator (or restore) job over the whole database, and a
+        backup that verified only the configured tenant would leave every other
+        tenant's chains unchecked.
+        """
+        async with self._session_factory() as session:
+            rows = (
+                await session.scalars(
+                    select(IncidentRow).order_by(IncidentRow.id).limit(limit).offset(offset)
+                )
+            ).all()
+            return [_incident(row) for row in rows]
+
     async def list_incidents(
         self,
         tenant_id: str,
