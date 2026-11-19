@@ -1165,11 +1165,17 @@ asserts that a dump with one flipped byte is refused before anything is created.
 A checklist line is not enough for an audit ledger; the operator-facing version is
 in `docs/operations.md`, including what a hash chain does and does not prove.
 
-### 12.2 Migrations
+### 12.2 ✅ Migrations
 
-`alembic upgrade head` from an empty database and from the previous release tag,
-both in CI. Downgrade is not promised; forward-only with a documented restore
-path.
+`tests/test_migrations.py` walks the revision chain: every revision is applied to
+a fresh database and then carried to head, the migrated schema is compared with
+the model metadata column by column (a model change without a migration fails
+there), and a database seeded at the last revision that touched `incidents` is
+upgraded to head and then has every hash chain re-verified, which proves the
+upgrade does not rewrite the ledger. There are no release tags yet, so the
+"previous release" case is expressed as "the previous revision on the chain",
+which is what a tag would point at anyway. Downgrade is not promised: forward-only
+with the restore path in `docs/operations.md`.
 
 ### 12.3 Runbooks
 
@@ -1264,7 +1270,7 @@ and approver groups are both enforced.
 | ID | Task | Files | Acceptance | Est |
 |---|---|---|---|---|
 | 9.1 ✅ | Backup/restore/verify scripts | `scripts/pg-backup.sh`, `scripts/pg-restore.sh`, `cli/ledger.py`, CI job, `docs/operations.md` | restore + chain valid | 8 |
-| 9.2 | Migration upgrade test | CI job | empty → head; prev tag → head | 4 |
+| 9.2 ✅ | Migration upgrade test | `tests/test_migrations.py` | empty → head per revision; data survives to head | 4 |
 | 9.3 | Runbooks (3 classes) | `docs/runbooks/` | operator can follow without source | 8 |
 | 9.4 | OTel spans + metrics + SLO doc | `core/telemetry.py`, docs | spans visible in a local collector | 10 |
 | 9.5 | Compose smoke test | CI job | incident filed and resolved | 6 |

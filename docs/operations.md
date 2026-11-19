@@ -133,6 +133,25 @@ a digest separately — a tail-truncated restore fails the count comparison even
 though the remaining chain is internally consistent. Keep the manifest somewhere
 the dump itself cannot be rewritten, or the check travels with what it checks.
 
+## Upgrades and migrations
+
+A restore is also an upgrade: `pg-restore.sh` calls `alembic upgrade head` after
+the dump is loaded, so a backup from an older build is carried forward rather
+than restored into a schema it does not match.
+
+Upgrades are forward-only. There is no `alembic downgrade` in any procedure,
+because a downgrade that drops a column drops the audit trail in it. The way back
+is the restore: take a backup before upgrading (`pg-backup.sh`), and if the
+upgrade is wrong, restore it into the database the new build does not touch and
+point the service at it.
+
+CI proves the chain rather than assuming it. `tests/test_migrations.py` applies
+each revision to a fresh database and carries it to head, compares the migrated
+schema against the model metadata column by column so a forgotten migration fails
+before release, and seeds an incident at the last revision that changed the
+incident shape, upgrades to head, and re-verifies every chain. That last check is
+the one that matters here: an upgrade must not touch a sealed row.
+
 ## Restore drills
 
 Run a drill on a schedule you would be comfortable explaining after an incident:
