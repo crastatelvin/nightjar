@@ -1206,11 +1206,17 @@ is a startup error rather than a silently empty dashboard.
 - Verified by `tests/test_telemetry.py`, including a full lab incident asserting the
   spans exist with the right provider and outcome.
 
-### 12.5 Compose smoke test
+### 12.5 ✅ Compose smoke test
 
-CI job that runs `docker compose up -d`, waits for health, files one incident
-through the API, asserts resolution, and tears down. Images currently build but
-are never run together.
+`scripts/compose-smoke.sh` files one lab incident through the running stack, waits
+for `resolved`, approves anything pending the way an operator would, and requires
+both hash chains to verify. It polls readiness itself so a failure names the
+service that did not come up.
+
+CI job `compose smoke` builds the API/lab/migration images from
+`deploy/compose/compose.yaml`, starts `db`, `migrate`, `lab`, and `api`, runs the
+script, dumps logs on failure, and always tears down with `docker compose down -v`.
+This is the only job that runs the images together rather than building them.
 
 ---
 
@@ -1286,7 +1292,7 @@ and approver groups are both enforced.
 | 9.2 ✅ | Migration upgrade test | `tests/test_migrations.py` | empty → head per revision; data survives to head | 4 |
 | 9.3 ✅ | Runbooks (3 classes) | `docs/runbooks/` | operator can follow without source | 8 |
 | 9.4 ✅ | OTel spans + metrics + SLO doc | `core/telemetry.py`, `docs/observability.md` | spans visible in a local collector | 10 |
-| 9.5 | Compose smoke test | CI job | incident filed and resolved | 6 |
+| 9.5 ✅ | Compose smoke test | `scripts/compose-smoke.sh`, CI job | incident filed and resolved | 6 |
 
 **Phase 9 total: ~36 h.**
 

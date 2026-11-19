@@ -42,6 +42,18 @@ This adds Temporal, its own PostgreSQL, and a worker. Set
 `NIGHTJAR_ORCHESTRATOR=temporal` so the API starts workflows instead of running the
 pipeline in-process.
 
+## Smoke test
+
+`scripts/compose-smoke.sh` (run from the repository root, after the stack is up)
+files a lab incident through the API and requires it to resolve with both hash
+chains intact. CI runs exactly this, in `.github/workflows/ci.yml`:
+
+```bash
+docker compose up -d db migrate lab api
+./scripts/compose-smoke.sh
+docker compose down -v
+```
+
 ## Files
 
 - `compose.yaml` — the stack
