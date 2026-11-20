@@ -41,7 +41,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: astral-sh/setup-uv@v6
+      - uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
           python-version: ${{ env.PYTHON_VERSION }}
@@ -67,7 +67,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: astral-sh/setup-uv@v6
+      - uses: astral-sh/setup-uv@v7
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
@@ -100,7 +100,7 @@ jobs:
           chmod +x "$HOME/.local/bin/opa"
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
-      - uses: astral-sh/setup-uv@v6
+      - uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
           python-version: ${{ env.PYTHON_VERSION }}
@@ -155,7 +155,7 @@ jobs:
           echo "/usr/lib/postgresql/18/bin" >> "$GITHUB_PATH"
           /usr/lib/postgresql/18/bin/pg_dump --version
 
-      - uses: astral-sh/setup-uv@v6
+      - uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
           python-version: ${{ env.PYTHON_VERSION }}
@@ -190,7 +190,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: astral-sh/setup-uv@v6
+      - uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
           python-version: ${{ env.PYTHON_VERSION }}
@@ -269,7 +269,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: astral-sh/setup-uv@v6
+      - uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
           python-version: ${{ env.PYTHON_VERSION }}
