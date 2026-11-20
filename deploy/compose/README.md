@@ -42,6 +42,17 @@ This adds Temporal, its own PostgreSQL, and a worker. Set
 `NIGHTJAR_ORCHESTRATOR=temporal` so the API starts workflows instead of running the
 pipeline in-process.
 
+## Published images
+
+Release tags build and publish signed multi-architecture images:
+
+- `ghcr.io/crastatelvin/nightjar` — API, worker, lab CLI, evaluation CLI
+- `ghcr.io/crastatelvin/nightjar-web` — command deck
+
+Verify the signature and pin the digest before running one anywhere real; the
+commands are in [docs/supply-chain.md](../../docs/supply-chain.md). The Compose file
+builds from this checkout by default, which is what you want while developing.
+
 ## Lab addressing
 
 The lab service advertises itself at `http://lab:8100` through

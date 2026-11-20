@@ -266,6 +266,7 @@ When the API enforces a token, add the UI origin to `NIGHTJAR_CORS_ORIGINS`
 - [Operations: backup, restore, and ledger verification](docs/operations.md)
 - [Observability: traces, metrics, and SLOs](docs/observability.md)
 - [Releasing: versioning, the tag workflow, and what is published](docs/releasing.md)
+- [Supply chain: signed images, SBOM, provenance, digest pins](docs/supply-chain.md)
 - [Runbooks](docs/runbooks/) — site outage, exposed credential, phishing
 - [Evaluation](docs/evals.md)
 - [Real-world readiness plan](docs/plan/real-world-readiness.md) — provider
