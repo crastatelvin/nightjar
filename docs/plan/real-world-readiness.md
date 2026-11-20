@@ -61,7 +61,7 @@ recorded incidents, one per class, with chain verification green.
 | Fail-closed production defaults | Real | `Settings._refuse_unsafe_production` |
 | Multi-process safety | **Real for incidents, the scheduler, and intake replay** | `api/locks.py`, `api/replay.py`, `tests/test_locks.py`, `tests/test_replay_store.py` |
 | Real-model evaluation | **Missing** | All numbers are mock |
-| OIDC / RBAC / rate limits | **OIDC and a per-caller API budget are real**; group-to-role mapping and a shared cross-replica limiter are missing | `api/auth.py`, `api/ratelimit.py` |
+| OIDC / RBAC / rate limits | **OIDC, approver groups, and a per-caller API budget are real**, including a database-backed bucket shared by every replica; group-to-role mapping is missing | `api/auth.py`, `api/ratelimit.py` |
 
 Two defaults are actively dangerous in production and are fixed first:
 
@@ -1270,7 +1270,7 @@ while a human step is outstanding.
 | 7.2 ✅ | Scheduler leader election | `api/main.py`, `api/locks.py`, tests | two processes, one runs checks | 4 |
 | 7.3 ✅ | OIDC JWT auth + JWKS cache | `api/auth.py`, `api/deps.py`, `tests/test_auth.py` | valid token → subject; expired/forged → 403 | 12 |
 | 7.4 ✅ | Separation of duties + OIDC approver groups | `api/auth.py`, `api/deps.py`, `api/service.py`, `tests/test_separation_of_duties.py`, `tests/test_approver_groups.py` | reporter cannot approve own R2; non-members cannot sign off | 6 |
-| 7.5 ✅ | Rate limiting + body caps + request IDs | `api/middleware.py`, `api/ratelimit.py`, tests | 429 after budget; 413 over cap | 8 |
+| 7.5 ✅ | Rate limiting + body caps + request IDs, per-process or database-backed | `api/middleware.py`, `api/ratelimit.py`, `alembic/...9f1e7c2a6b40`, tests | 429 after budget; 413 over cap; two replicas share one bucket with `database` | 8 |
 | 7.6 ✅ | SSE via `LISTEN/NOTIFY` with poll fallback | `api/notify.py`, `api/repository.py`, `api/routers/incidents.py`, tests | p95 < 150 ms | 8 |
 
 **Phase 7 total: ~44 h.**

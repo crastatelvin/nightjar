@@ -59,6 +59,24 @@ def build_service(settings: Settings, *, telemetry: Telemetry | None = None) -> 
     )
 
 
+def _build_limiter(
+    settings: Settings,
+) -> ratelimit.CallerLimiter | ratelimit.DatabaseLimiter | None:
+    """The budget's home: process memory, or one shared row per caller."""
+    if not settings.api_rate_limit_enabled:
+        return None
+    if settings.api_rate_limit_backend == "database":
+        return ratelimit.DatabaseLimiter(
+            db.get_session_factory,
+            per_minute=settings.api_rate_limit_per_minute,
+            burst=settings.api_rate_limit_burst,
+        )
+    return ratelimit.CallerLimiter(
+        per_minute=settings.api_rate_limit_per_minute,
+        burst=settings.api_rate_limit_burst,
+    )
+
+
 def create_app(
     settings: Settings | None = None,
     service: IncidentService | None = None,
@@ -102,14 +120,7 @@ def create_app(
     api.state.service = service
     # The budget is per app instance, not per process: a test that builds two
     # apps must not have one spend the other's tokens.
-    api.state.rate_limiter = (
-        ratelimit.CallerLimiter(
-            per_minute=resolved.api_rate_limit_per_minute,
-            burst=resolved.api_rate_limit_burst,
-        )
-        if resolved.api_rate_limit_enabled
-        else None
-    )
+    api.state.rate_limiter = _build_limiter(resolved)
     api.state.oidc = (
         OIDCVerifier(
             issuer=resolved.oidc_issuer,

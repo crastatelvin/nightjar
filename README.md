@@ -345,15 +345,17 @@ Not yet real:
 - authentication is either one shared bearer token, where `x-nightjar-actor` is an
   audit label, or OIDC with a verified issuer, audience, and key set, where the actor
   comes from the token and the header is ignored; `NIGHTJAR_OIDC_APPROVER_GROUPS`
-  gates sign-off on group membership, and each caller has a per-process request
-  budget, but the budget is not shared across replicas yet;
+  gates sign-off on group membership, and each caller has a request budget that is
+  per process by default and can be made shared across replicas with
+  `NIGHTJAR_API_RATE_LIMIT_BACKEND=database`;
 - separation of duties is opt-in (`NIGHTJAR_REQUIRE_SEPARATION_OF_DUTIES`), because a
   one-person operations team is the target deployment; with it on, the person who
   filed the incident cannot approve its remediation;
 - replicas are safe for incident work, the stability scheduler, and alert-intake
   replay through PostgreSQL advisory locks and a shared `intake_deliveries` table;
-  provider rate limits are enforced per process, so a fleet of N replicas may
-  issue N times the budget, and a limiter shared across replicas is not built.
+  provider rate limits are still enforced per process, so a fleet of N replicas may
+  issue N times a provider's budget; only the caller-facing API budget has a shared
+  backend.
 
 Production is fail-closed at startup: with `NIGHTJAR_ENVIRONMENT=production` the process
 refuses to boot with the lab connector on, private probes allowed, no bearer token or

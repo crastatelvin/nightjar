@@ -7,17 +7,19 @@ from nightjar.api.auth import AuthRejected, AuthRequired, Identity, OIDCVerifier
 from nightjar.api.service import IncidentService
 
 
-def _spend_budget(request: Request, key: str) -> None:
+async def _spend_budget(request: Request, key: str) -> None:
     """Charge one request to ``key`` and refuse when the budget is gone.
 
     The decision is left on the request so the response can carry the remaining
     budget; the middleware turns that into ``x-ratelimit-*`` headers. A ``None``
     limiter means the deployment turned the budget off.
     """
-    limiter: ratelimit.CallerLimiter | None = getattr(request.app.state, "rate_limiter", None)
+    limiter: ratelimit.CallerLimiter | ratelimit.DatabaseLimiter | None = getattr(
+        request.app.state, "rate_limiter", None
+    )
     if limiter is None:
         return
-    decision = limiter.check(key)
+    decision = await limiter.spend(key)
     request.state.rate_limit = decision
     if decision.allowed:
         return
@@ -44,7 +46,7 @@ def _peer_key(request: Request) -> str:
     return f"peer:{address}"
 
 
-def enforce_peer_budget(request: Request) -> None:
+async def enforce_peer_budget(request: Request) -> None:
     """Charge the budget to the caller's address.
 
     This runs before any credential is checked. Billing only successful requests
@@ -53,7 +55,7 @@ def enforce_peer_budget(request: Request) -> None:
     The address is the only key available at that point, and with a trusted
     proxy setting ``X-Forwarded-For`` it is the real client's address.
     """
-    _spend_budget(request, _peer_key(request))
+    await _spend_budget(request, _peer_key(request))
 
 
 async def require_approver(request: Request) -> None:
@@ -90,7 +92,7 @@ async def require_auth(
     production validator refuses. Otherwise a missing credential is ``401`` and a
     refused one is ``403``, so a client can tell "log in" from "you are not allowed".
     """
-    enforce_peer_budget(request)
+    await enforce_peer_budget(request)
     settings = request.app.state.settings
     verifier: OIDCVerifier | None = getattr(request.app.state, "oidc", None)
     try:

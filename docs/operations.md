@@ -54,8 +54,8 @@ were written:
   "bytes": 183883,
   "git_sha": "de0360417361785afc52c6fb05520ae722a36a72",
   "git_dirty": false,
-  "alembic_head": "4b7e2c9d1a83",
-  "schema_revision": "4b7e2c9d1a83",
+  "alembic_head": "9f1e7c2a6b40",
+  "schema_revision": "9f1e7c2a6b40",
   "pg_dump_version": "pg_dump (PostgreSQL) 18.6",
   "server_version": "18.6",
   "counts": {"incidents": 47, "timeline_events": 664, "evidence_items": 220}

@@ -56,6 +56,7 @@ Each caller has a token bucket:
 | Budget | `NIGHTJAR_API_RATE_LIMIT_PER_MINUTE` (default 120) |
 | Burst | `NIGHTJAR_API_RATE_LIMIT_BURST` (default 60) |
 | Key | peer address; the last `X-Forwarded-For` entry when that is trusted |
+| Home | `NIGHTJAR_API_RATE_LIMIT_BACKEND`: `memory` (default) or `database` |
 
 Over budget is `429` with `Retry-After` in whole seconds. Successful responses and
 `429`s carry `x-ratelimit-limit`, `x-ratelimit-remaining`, and
@@ -66,8 +67,13 @@ not a way around the limit.
 
 Two consequences worth knowing:
 
-- The bucket is per process. With N replicas a caller can spend N times the
-  configured budget, so the default is sized well below what one replica serves.
+- With the default `memory` backend the bucket is per process, so N replicas
+  allow a caller N times the configured budget. That is the right trade for the
+  one-replica deployment Nightjar is sized for; set
+  `NIGHTJAR_API_RATE_LIMIT_BACKEND=database` when you run more than one API
+  replica, and the configured number becomes the real budget. The database
+  backend costs one short transaction per request and adds the
+  `api_rate_limits` table.
 - The web UI reaches the API through a server-side proxy, so every browser
   session shares the proxy's address and therefore one budget. Raise
   `NIGHTJAR_API_RATE_LIMIT_PER_MINUTE` when many people watch the same dashboard.
@@ -369,6 +375,7 @@ incident. Nothing executes on rejection.
 | `NIGHTJAR_API_RATE_LIMIT_ENABLED` | Per-caller budget on/off (default true) |
 | `NIGHTJAR_API_RATE_LIMIT_PER_MINUTE` | Tokens per minute per caller (default 120) |
 | `NIGHTJAR_API_RATE_LIMIT_BURST` | Largest back-to-back burst per caller (default 60) |
+| `NIGHTJAR_API_RATE_LIMIT_BACKEND` | `memory` (per process) or `database` (shared across replicas) |
 | `NIGHTJAR_API_TRUST_FORWARDED_FOR` | Key callers by the last `X-Forwarded-For` entry (default false) |
 | `NIGHTJAR_API_MAX_BODY_BYTES` | Largest accepted request body (default 1048576) |
 | `NIGHTJAR_SSE_NOTIFY_ENABLED` | Wake case-file streams from `LISTEN`/`NOTIFY` (default true) |

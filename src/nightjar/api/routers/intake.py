@@ -99,7 +99,7 @@ async def intake_webhook(
     # The HMAC proves the sender knows the secret; it says nothing about how
     # often they may call, so the peer address is billed like shared-token
     # traffic. This runs before the body is read so a flood is cheap to refuse.
-    enforce_peer_budget(request)
+    await enforce_peer_budget(request)
     body = await _read_body(request, limit)
 
     try:

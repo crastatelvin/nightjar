@@ -47,10 +47,15 @@ class Settings(BaseSettings):
     api_token: str | None = None
     # The API's own budget, separate from the per-provider connector budgets.
     # A caller gets `per_minute` tokens per minute and may spend up to `burst`
-    # of them at once. Process-local: N replicas means N times this budget.
+    # of them at once.
     api_rate_limit_enabled: bool = True
     api_rate_limit_per_minute: int = Field(default=120, ge=1)
     api_rate_limit_burst: int = Field(default=60, ge=1)
+    # "memory" is per process, so N replicas give a caller N times the budget.
+    # "database" keeps the bucket in PostgreSQL, which is one extra transaction
+    # per request and one real budget for the deployment. Use it for more than
+    # one replica.
+    api_rate_limit_backend: str = "memory"
     # Only trust X-Forwarded-For when a proxy you control sets it; otherwise a
     # caller can pick its own address and its own budget.
     api_trust_forwarded_for: bool = False
@@ -213,6 +218,13 @@ class Settings(BaseSettings):
             raise ValueError(
                 "Microsoft 365 needs NIGHTJAR_MICROSOFT_TENANT_ID, "
                 "NIGHTJAR_MICROSOFT_CLIENT_ID, and NIGHTJAR_MICROSOFT_CLIENT_SECRET together"
+            )
+        if self.api_rate_limit_backend not in {"memory", "database"}:
+            # A typo would otherwise silently fall back to the process-local bucket,
+            # which is exactly the wrong budget once there is more than one replica.
+            raise ValueError(
+                "NIGHTJAR_API_RATE_LIMIT_BACKEND must be 'memory' or 'database', "
+                f"not {self.api_rate_limit_backend!r}"
             )
         if self.oidc_issuer and not self.oidc_audience:
             # An issuer with no audience check accepts a token minted for any other

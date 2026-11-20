@@ -113,7 +113,7 @@ def _upgrade(url: str, revision: str) -> None:
 def _current(url: str) -> str:
     result = _alembic(url, "current")
     assert result.returncode == 0, result.stderr
-    # "4b7e2c9d1a83 (head)" or "4b7e2c9d1a83"
+    # "<revision> (head)" or "<revision>"
     return result.stdout.strip().split()[0]
 
 
@@ -126,7 +126,7 @@ def _alembic_installed() -> None:
 def test_the_chain_has_the_revisions_the_tests_expect() -> None:
     revisions = _revisions()
     assert revisions[0] == "f7472f8a882e"
-    assert revisions[-1] == "4b7e2c9d1a83"
+    assert revisions[-1] == "9f1e7c2a6b40"
     assert LAST_LEDGER_CHANGE in revisions
 
 

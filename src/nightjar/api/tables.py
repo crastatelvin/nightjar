@@ -267,6 +267,27 @@ class IntakeDeliveryRow(Base):
     )
 
 
+class RateLimitRow(Base):
+    """A caller's token bucket, shared by every API replica.
+
+    The in-process limiter is per process, so N replicas give a caller N times the
+    budget. This table makes the budget a property of the deployment: one row per
+    caller key, refilled from the elapsed time since ``updated_at`` inside the same
+    transaction that debits it, so two replicas cannot both spend the last token.
+
+    Rows are disposable — a caller that has refilled to full carries no
+    information — and are pruned on a timer.
+    """
+
+    __tablename__ = "api_rate_limits"
+
+    key: Mapped[str] = mapped_column(String(80), primary_key=True)
+    tokens: Mapped[float] = mapped_column(Float, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, nullable=False, index=True
+    )
+
+
 class NoteRow(Base):
     __tablename__ = "notes"
 

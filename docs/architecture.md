@@ -255,10 +255,13 @@ response wherever the body happens to be read. Both sit outside the routers, so 
 `413` or `429` is correlated and CORS-visible like any other response.
 
 The API budget (`api/ratelimit.py`) is a token bucket per caller address, charged
-before the credential is verified so a flood of invalid tokens is not free. It is
-deliberately process-local and documented as such: the default is sized below what
-one replica can serve, and a shared limiter is separate work. Connector budgets
-protect providers; this one protects Nightjar.
+before the credential is verified so a flood of invalid tokens is not free. It
+lives in process memory by default, which is the honest choice for the one-replica
+deployment Nightjar targets. `NIGHTJAR_API_RATE_LIMIT_BACKEND=database` moves the
+bucket into an `api_rate_limits` row per caller, refilled and debited under the row
+lock in one transaction, so every replica spends the same tokens and the configured
+number is the real budget. Connector budgets protect providers; this one protects
+Nightjar.
 
 Case-file streams are woken rather than polled. `_append_event_in_session` emits
 `pg_notify` in the transaction that appends the timeline event, so PostgreSQL
