@@ -63,9 +63,31 @@ async def signal_approval(incident_id: str, approved: bool) -> None:
     await handle.signal(IncidentWorkflow.approval_decided, approved)
 
 
+async def signal_manual_step(incident_id: str) -> None:
+    """Wake a workflow waiting on an attestation.
+
+    A workflow that has already finished is not an error: the attestation is
+    recorded in the database either way, and an incident can legitimately have no
+    running workflow (it was filed before Temporal was enabled, or its clock ran
+    out). Refusing the attestation because the durability layer is gone would make
+    the API depend on the workflow's lifetime.
+    """
+    from temporalio.service import RPCError, RPCStatusCode
+
+    client = await get_temporal_client()
+    handle = client.get_workflow_handle(workflow_id(incident_id))
+    try:
+        await handle.signal(IncidentWorkflow.manual_step_attested)
+    except RPCError as exc:
+        if exc.status != RPCStatusCode.NOT_FOUND:
+            raise
+        log.warning("no running workflow for %s; attestation is recorded without one", incident_id)
+
+
 __all__ = [
     "get_temporal_client",
     "signal_approval",
+    "signal_manual_step",
     "start_incident_workflow",
     "workflow_id",
 ]

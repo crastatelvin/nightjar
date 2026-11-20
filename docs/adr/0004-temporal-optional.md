@@ -23,9 +23,17 @@ Ship two orchestrators behind one service:
   approvals. Simple to run; a restart during a pending approval is recoverable via
   the scheduler, and the incident state lives in PostgreSQL.
 - **Temporal (optional).** A workflow owns the state machine with one-attempt
-  activities for investigation, approval expiry, execution, and stability
-  verification. Approval decisions signal the workflow. The API signals instead of
-  executing inline when `NIGHTJAR_ORCHESTRATOR=temporal`.
+  activities for investigation, approval expiry, execution, manual-step
+  continuation, and stability verification. Approval decisions signal the
+  workflow. The API signals instead of executing inline when
+  `NIGHTJAR_ORCHESTRATOR=temporal`.
+
+  A plan can pause on steps no provider API performs (Stripe secret-key
+  revocation). The workflow does not finish at that point: it waits on a
+  `manual_step_attested` signal, runs one activity that asks the service to
+  continue, and parks again if another assisted step is still outstanding. A
+  signal to a workflow that has already closed is logged and ignored, so an
+  attestation is never lost because the durability layer was not running.
 
 Both paths call the same `IncidentService` methods. Activities are thin wrappers;
 they do not reimplement policy, execution, or verification.
@@ -37,7 +45,9 @@ they do not reimplement policy, execution, or verification.
 - Durable mode requires a Temporal server and `nightjar-worker`. Compose provides
   it; it is not mandatory.
 - Two orchestration paths must stay behaviourally identical. Tests cover both, and
-  a live end-to-end run verifies the approval signal path.
+  a live end-to-end run verifies the approval signal path. `resume_after_manual()`
+  is the single implementation of "continue once nothing waits on a human", called
+  by the API in inline mode and by an activity under Temporal.
 - Long stability windows are reliable in Temporal and best-effort with the inline
   scheduler. Operators who need strict durability should enable Temporal.
 

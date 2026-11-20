@@ -1169,15 +1169,30 @@ class IncidentService:
                 },
             )
 
-            remaining = [
-                item
-                for item in actions
-                if item.id != action_id and states.get(item.id) is ActionStatus.AWAITING_MANUAL
-            ]
-            if remaining:
+            if self.settings.orchestrator == "temporal":
+                from nightjar.worker.client import signal_manual_step
+
+                # The workflow owns the post-attestation step, so a worker crash
+                # between "recorded" and "verified" is a Temporal retry, not a
+                # case nobody polls again.
+                await signal_manual_step(incident_id)
                 return
-            # The human's word is not proof. Run the required predicates.
-            await self._verify(incident_id, phase="t0")
+            await self.resume_after_manual(incident_id)
+
+    async def resume_after_manual(self, incident_id: str) -> Incident:
+        """Verify once no manual step is still waiting on a human.
+
+        A plan can carry more than one assisted step, so attestation cannot be
+        the moment verification runs: the second step may still be outstanding.
+        This is the single place that decides, and both orchestrators call it.
+        """
+        states = await self.repo.action_states(incident_id)
+        actions = await self.repo.list_actions(incident_id)
+        if any(states.get(item.id) is ActionStatus.AWAITING_MANUAL for item in actions):
+            return await self.repo.get_incident(incident_id)
+        # The human's word is not proof. Run the required predicates.
+        await self._verify(incident_id, phase="t0")
+        return await self.repo.get_incident(incident_id)
 
     # -------------------------------------------------------------- verification
     async def _verify(

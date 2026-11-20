@@ -74,6 +74,14 @@ async def verify_stability(incident_id: str) -> str:
 
 
 @activity.defn
+async def verify_manual(incident_id: str) -> str:
+    """Continue after an attestation, or report that another step still waits."""
+    service = get_activity_service()
+    incident = await service.resume_after_manual(incident_id)
+    return incident.status.value
+
+
+@activity.defn
 async def expire_approvals(incident_id: str) -> str:
     """Cancel an unapproved plan when the operator window closes."""
     service = get_activity_service()
@@ -97,5 +105,6 @@ __all__ = [
     "expire_approvals",
     "get_activity_service",
     "investigate_and_plan",
+    "verify_manual",
     "verify_stability",
 ]

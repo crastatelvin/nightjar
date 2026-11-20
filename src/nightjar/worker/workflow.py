@@ -19,12 +19,14 @@ with workflow.unsafe.imports_passed_through():
         execute_and_verify,
         expire_approvals,
         investigate_and_plan,
+        verify_manual,
         verify_stability,
     )
 
 ONE_ATTEMPT = RetryPolicy(maximum_attempts=1)
 INVESTIGATION_TIMEOUT = timedelta(minutes=6)
 EXECUTION_TIMEOUT = timedelta(minutes=10)
+VERIFICATION_TIMEOUT = timedelta(minutes=5)
 
 
 @dataclass
@@ -44,11 +46,16 @@ class IncidentWorkflow:
     def __init__(self) -> None:
         self._approval_received = False
         self._approved = False
+        self._manual_step_attested = False
 
     @workflow.signal
     def approval_decided(self, approved: bool) -> None:
         self._approval_received = True
         self._approved = bool(approved)
+
+    @workflow.signal
+    def manual_step_attested(self) -> None:
+        self._manual_step_attested = True
 
     @workflow.query
     def approval_state(self) -> dict[str, bool]:
@@ -56,6 +63,10 @@ class IncidentWorkflow:
             "received": self._approval_received,
             "approved": self._approved,
         }
+
+    @workflow.query
+    def manual_state(self) -> dict[str, bool]:
+        return {"attested": self._manual_step_attested}
 
     @workflow.run
     async def run(self, payload: IncidentWorkflowInput) -> IncidentWorkflowResult:
@@ -86,6 +97,19 @@ class IncidentWorkflow:
                 execute_and_verify,
                 payload.incident_id,
                 start_to_close_timeout=EXECUTION_TIMEOUT,
+                retry_policy=ONE_ATTEMPT,
+            )
+
+        # A plan can pause on steps no provider API can perform. The workflow does
+        # not exit: it parks here until an operator attests, then asks the service
+        # to continue, which may mean waiting again for the next step.
+        while status == "awaiting_manual":
+            await workflow.wait_condition(lambda: self._manual_step_attested)
+            self._manual_step_attested = False
+            status = await workflow.execute_activity(
+                verify_manual,
+                payload.incident_id,
+                start_to_close_timeout=VERIFICATION_TIMEOUT,
                 retry_policy=ONE_ATTEMPT,
             )
 

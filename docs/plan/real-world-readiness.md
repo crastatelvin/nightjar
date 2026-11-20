@@ -1258,9 +1258,11 @@ shipped: Google Workspace (6.9) and Microsoft 365 (6.10).
 
 ### Phase 7 — Multi-process and auth (P0)
 
-Status: Phase 7 is shipped except the Temporal signalling follow-up tracked in
-Phase 8. OIDC carries identity and approver-group membership; separation of duties
-and approver groups are both enforced.
+Status: Phase 7 is shipped. OIDC carries identity and approver-group membership;
+separation of duties and approver groups are both enforced. The Temporal
+manual-step follow-up is done: the workflow parks on an attestation signal and
+continues through `resume_after_manual()`, so the durable path no longer finishes
+while a human step is outstanding.
 
 | ID | Task | Files | Acceptance | Est |
 |---|---|---|---|---|

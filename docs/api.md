@@ -319,9 +319,13 @@ Header `x-nightjar-actor: alice`.
 {"note": "Expired the checkout key in the Dashboard."}
 ```
 
-- `200` — attestation recorded as `human_note` evidence and the required
-  predicates run; returns the case file. A failed predicate reopens the incident
-  and the step can be attested again.
+- `200` — attestation recorded as `human_note` evidence and the case file
+  returned. Under the inline orchestrator the required predicates run before the
+  response; under Temporal the attestation signals the workflow, which runs them
+  (the state arrives through the case-file stream). Predicates run only once every
+  manual step in the plan is attested, so a second outstanding step does not cause
+  a premature verification. A failed predicate reopens the incident and the step
+  can be attested again.
 - `404` — the action is not part of this incident.
 - `409` — the action is not awaiting a manual step, or it is already attested
   and the incident has not reopened.
