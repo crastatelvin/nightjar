@@ -1302,8 +1302,8 @@ while a human step is outstanding.
 
 | ID | Task | Acceptance | Est |
 |---|---|---|---|
-| 10.1 | PyPI publish workflow (`nightjar-ir`, `nightjarctl`) | tagged release installs | 6 |
-| 10.2 | `CHANGELOG.md`, semver tags | 0.1.0 entry | 2 |
+| 10.1 ✅ | PyPI publish workflow (`nightjar-ir`, `nightjarctl`), trusted publishing, wheel install smoke (`release.yml`, CI `packaging` job, `docs/releasing.md`) | tagged release installs | 6 |
+| 10.2 ✅ | `CHANGELOG.md`, semver tags, one-version tests (`tests/test_versioning.py`) | 0.1.0 entry | 2 |
 | 10.3 | Signed images + SBOM + provenance | cosign verify in docs | 6 |
 | 10.4 ✅ | CodeQL, Dependabot, `CODE_OF_CONDUCT`, issue templates (`codeql.yml`, `dependabot.yml`, `ISSUE_TEMPLATE/`) | enabled | 4 |
 | 10.5 | Docs site pass + demo recording | three-class walkthrough | 12 |

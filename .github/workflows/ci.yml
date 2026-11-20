@@ -60,6 +60,29 @@ jobs:
       - name: Tests
         run: uv run pytest -q
 
+  packaging:
+    name: packaging
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Build the distribution
+        run: uv build
+
+      - name: Check the metadata renders
+        run: uv run --no-project --with twine twine check dist/*
+
+      - name: Install the wheel into an empty environment
+        run: |
+          uv venv --python 3.14 .smoke
+          uv pip install --python .smoke/bin/python dist/*.whl
+          .smoke/bin/nightjarctl --version
+
   policy:
     name: policy parity
     runs-on: ubuntu-latest
