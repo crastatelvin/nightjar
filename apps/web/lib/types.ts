@@ -35,6 +35,7 @@ export type ActionStatus =
   | "executing"
   | "executed"
   | "failed"
+  | "unknown"
   | "rolled_back"
   | "cancelled";
 export type ApprovalStatus = "pending" | "approved" | "rejected" | "expired";

@@ -83,6 +83,7 @@ async def expire_approvals(incident_id: str) -> str:
         if states.get(action.id) not in {
             ActionStatus.EXECUTED,
             ActionStatus.FAILED,
+            ActionStatus.UNKNOWN,
             ActionStatus.DENIED,
         }:
             await service.repo.set_action_status(action.id, ActionStatus.CANCELLED)

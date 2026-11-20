@@ -142,8 +142,13 @@ def test_a_stale_timestamp_is_rejected(client: TestClient, webhook_secret: str) 
 
 
 def test_a_future_timestamp_is_rejected(client: TestClient, webhook_secret: str) -> None:
-    response = post(client, webhook_secret, alert(), timestamp=int(time.time()) + 301)
+    # An hour, not one second past the tolerance: the timestamp is truncated to a
+    # whole second, so a boundary value can land exactly on the limit depending on
+    # where in the second the check runs.
+    response = post(client, webhook_secret, alert(), timestamp=int(time.time()) + 3600)
     assert response.status_code == 401
+    assert "tolerance" in response.json()["detail"]
+    assert incident_count(client) == 0
 
 
 def test_a_replayed_delivery_is_rejected(client: TestClient, webhook_secret: str) -> None:

@@ -132,6 +132,15 @@ the provider's exact `Retry-After` taking precedence when it sent one. The faile
 attempts are recorded on `action.completed`, so a success after two rate limits
 does not look like a clean first try.
 
+When a mutation cannot be safely repeated and the provider never confirmed it, the
+action is recorded as `unknown` rather than `failed`, and the executor stops the
+plan. `IncidentService._reconcile_unknown()` then runs the required predicates
+against the target: passing predicates resolve the case through the normal
+stability window, and failing ones fail it with the action left `unknown`,
+because only a human who can see the provider can say whether the change exists.
+It deliberately does not reopen — reopening produces a fresh plan, which would
+re-dispatch the mutation that may already be live.
+
 Each provider API has a process-local token bucket (`limiter_for(name)`), sized
 below the published limit because the bucket does not coordinate across replicas.
 That is a documented limit, not a silent one: N replicas mean N times the table.

@@ -12,6 +12,7 @@ import asyncio
 import logging
 from collections.abc import AsyncIterator
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
+from dataclasses import dataclass
 from datetime import timedelta
 from typing import Any
 
@@ -89,6 +90,15 @@ class BudgetExceeded(ServiceError):
 
 class Forbidden(ServiceError):
     """Authenticated, but not allowed to perform this particular action."""
+
+
+@dataclass(frozen=True, slots=True)
+class _Outcome:
+    """What the executor should do after dispatching one action."""
+
+    proceed: bool = True
+    manual: bool = False
+    unknown: bool = False
 
 
 def _jsonable(value: Any) -> Any:
@@ -796,12 +806,13 @@ class IncidentService:
                 target=action.target,
                 risk=action.risk.value,
             ) as span:
-                continues, is_manual = await self._execute_one(
-                    incident_id, plan, action, provider, span
-                )
-            if is_manual:
+                outcome = await self._execute_one(incident_id, plan, action, provider, span)
+            if outcome.manual:
                 manual_actions.append(action)
-            if not continues:
+            if outcome.unknown:
+                await self._reconcile_unknown(incident_id, action, provider)
+                return
+            if not outcome.proceed:
                 return
         if manual_actions:
             await self._set_status(
@@ -831,8 +842,8 @@ class IncidentService:
         action: ActionSpec,
         provider: str,
         span: SpanHandle,
-    ) -> tuple[bool, bool]:
-        """One action, and whether the plan continues and whether it was manual."""
+    ) -> _Outcome:
+        """One action, and what the executor should do next."""
         manual = self.registry.manual_step(action)
         if manual is not None:
             # No mutation happens here. The provider has no API for it, so
@@ -866,7 +877,7 @@ class IncidentService:
                 action=action.action_type.value,
                 outcome="manual",
             )
-            return True, True
+            return _Outcome(proceed=True, manual=True)
         key = action_key(incident_id, plan.id, action)
         replay = await self.repo.find_execution_by_key(key)
         if replay is not None:
@@ -892,7 +903,7 @@ class IncidentService:
                 action=action.action_type.value,
                 outcome="replayed",
             )
-            return True, False
+            return _Outcome()
         execution = await self.repo.record_execution_start(
             incident_id,
             action,
@@ -923,28 +934,40 @@ class IncidentService:
             )
         except Exception as exc:
             detail = exc.as_dict() if isinstance(exc, ConnectorError) else {"message": str(exc)}
+            maybe_applied = isinstance(exc, ConnectorError) and exc.maybe_applied
+            status = ActionStatus.UNKNOWN if maybe_applied else ActionStatus.FAILED
             await self.repo.record_execution_finish(
                 execution.id,
-                status=ActionStatus.FAILED,
-                after_state={"error": detail},
+                status=status,
+                after_state={"error": detail, "outcome": status.value},
                 error=str(exc),
             )
-            await self.repo.set_action_status(action.id, ActionStatus.FAILED)
+            await self.repo.set_action_status(action.id, status)
             await self.repo.append_event(
                 incident_id,
-                EventType.ACTION_FAILED,
+                EventType.ACTION_OUTCOME_UNKNOWN if maybe_applied else EventType.ACTION_FAILED,
                 actor="executor",
                 payload={"action_id": action.id, "error": str(exc), "detail": detail},
             )
-            await self._fail(incident_id, f"action {action.action_type.value} failed: {exc}")
-            span.set(outcome="failed", error=type(exc).__name__)
+            span.set(
+                outcome=status.value,
+                error=type(exc).__name__,
+                maybe_applied=maybe_applied,
+            )
             self.telemetry.count(
                 ACTION_TOTAL,
                 provider=provider,
                 action=action.action_type.value,
-                outcome="failed",
+                outcome=status.value,
             )
-            return False, False
+            if maybe_applied:
+                # The request left and the answer did not come back. Retrying can
+                # duplicate the change; assuming failure can leave a real outage
+                # unfixed while the case closes as failed. Stop and let the
+                # verifier decide from the target's actual state.
+                return _Outcome(proceed=False, unknown=True)
+            await self._fail(incident_id, f"action {action.action_type.value} failed: {exc}")
+            return _Outcome(proceed=False)
         await self.repo.record_execution_finish(
             execution.id,
             status=ActionStatus.EXECUTED,
@@ -973,7 +996,28 @@ class IncidentService:
             action=action.action_type.value,
             outcome="executed",
         )
-        return True, False
+        return _Outcome()
+
+    async def _reconcile_unknown(self, incident_id: str, action: ActionSpec, provider: str) -> None:
+        """Settle an action whose outcome the provider never confirmed.
+
+        A read timeout or a 5xx after a mutation means the change may or may not
+        have landed. Re-dispatching the same action risks doing it twice, and
+        declaring failure risks closing a case that was actually fixed. The
+        verification predicates are the only honest arbiter: they read the
+        target, not the request.
+
+        Passing predicates resolve the case through the normal stability window.
+        Failing predicates fail it with the action left ``unknown``, because only
+        a human who can see the provider's console can say what happened.
+        """
+        log.warning(
+            "action %s on %s against %s has an unknown outcome; reconciling through verification",
+            action.action_type.value,
+            action.target,
+            provider,
+        )
+        await self._verify(incident_id, phase="reconcile", unknown=action)
 
     # ---------------------------------------------------------------- approvals
     async def decide_approval(
@@ -1026,6 +1070,7 @@ class IncidentService:
                     if state not in {
                         ActionStatus.EXECUTED,
                         ActionStatus.FAILED,
+                        ActionStatus.UNKNOWN,
                         ActionStatus.DENIED,
                     }:
                         await self.repo.set_action_status(action.id, ActionStatus.CANCELLED)
@@ -1135,7 +1180,17 @@ class IncidentService:
             await self._verify(incident_id, phase="t0")
 
     # -------------------------------------------------------------- verification
-    async def _verify(self, incident_id: str, *, phase: str) -> bool:
+    async def _verify(
+        self, incident_id: str, *, phase: str, unknown: ActionSpec | None = None
+    ) -> bool:
+        """Run every predicate and act on the outcome.
+
+        ``unknown`` marks the run as the reconciliation of an action whose
+        outcome the provider never confirmed. The pass path is the same — the
+        target is healthy, which is the only thing that matters. The fail path
+        must not reopen: a fresh plan would re-dispatch a mutation that may
+        already exist.
+        """
         incident = await self.repo.get_incident(incident_id)
         plan = await self.repo.latest_plan(incident_id)
         if plan is None:
@@ -1222,8 +1277,17 @@ class IncidentService:
             },
         )
 
-        if phase == "t0":
+        if phase in {"t0", "reconcile"}:
             if not passed:
+                if unknown is not None:
+                    await self._fail(
+                        incident_id,
+                        f"action {unknown.action_type.value} on {unknown.target} may or "
+                        "may not have applied; the provider did not confirm it and the "
+                        "required predicates still fail. Check the provider before "
+                        "filing a new incident.",
+                    )
+                    return False
                 await self._reopen(incident, "post-remediation verification failed")
                 return False
             if self.settings.stability_seconds <= 0:

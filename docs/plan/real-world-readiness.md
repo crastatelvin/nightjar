@@ -1234,8 +1234,8 @@ shipped: Google Workspace (6.9) and Microsoft 365 (6.10).
 | ID | Task | Files | Acceptance | Est |
 |---|---|---|---|---|
 | 6.1 ✅ | Fail-closed `Settings` validator + production block in `.env.example` | `api/settings.py`, `.env.example`, `tests/test_settings.py` | production with lab/private/no-auth raises; dev unchanged | 4 |
-| 6.2 ◐ | Error taxonomy + `maybe_applied`; `ActionResult` deferred | `connectors/errors.py`, `connectors/*.py`, `tests/test_connector_errors.py` | every connector classifies status → typed error | 8 |
-| 6.3 ◐ | Derived idempotency key, partial unique index, replay path; `UNKNOWN` state open | `api/tables.py`, `api/repository.py`, `connectors/idempotency.py`, `alembic/...4b7e2c9d1a83` | same action twice → one mutation | 8 |
+| 6.2 ✅ | Error taxonomy + `maybe_applied`; `ActionResult` deferred | `connectors/errors.py`, `connectors/*.py`, `tests/test_connector_errors.py` | every connector classifies status → typed error | 8 |
+| 6.3 ✅ | Derived idempotency key, partial unique index, replay path, `UNKNOWN` + reconciliation | `api/tables.py`, `api/repository.py`, `connectors/idempotency.py`, `alembic/...4b7e2c9d1a83` | same action twice → one mutation | 8 |
 | 6.4 ✅ | Per-provider token bucket + `Retry-After` retry loop | `connectors/ratelimit.py`, `connectors/retry.py`, `api/service.py`, tests | 429 waits exactly `Retry-After`; no burst over budget | 5 |
 | 6.5 ✅ | `SecretVault`, `CredentialRef`, redaction registry | `core/secrets.py`, `core/redaction.py`, tests | raw secret absent from DB/log/evidence | 8 |
 | 6.6 ✅ | `nightjarctl doctor` + `GET /v1/meta/capabilities` | `cli/doctor.py`, `api/routers/meta.py`, `pyproject.toml`, tests | table renders; exit 0 only when all required ok | 10 |

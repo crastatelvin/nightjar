@@ -27,6 +27,8 @@ const ACTION_TONE: Record<ActionStatus, string> = {
   attested:
     "text-[var(--color-acid)] border-[rgba(200,255,114,0.24)] bg-[rgba(200,255,114,0.05)]",
   failed: "text-[var(--color-danger)] border-[rgba(255,111,97,0.32)] bg-[rgba(255,111,97,0.07)]",
+  unknown:
+    "text-[var(--color-amber)] border-[rgba(255,196,107,0.32)] bg-[rgba(255,196,107,0.06)]",
   denied: "text-[var(--color-danger)] border-[rgba(255,111,97,0.28)]",
   proposed: "text-[var(--color-dim)] border-[var(--color-line)]",
   cancelled: "text-[var(--color-dim)] border-[var(--color-line)]",
@@ -35,6 +37,9 @@ const ACTION_TONE: Record<ActionStatus, string> = {
 
 function actionStatusLabel(status: ActionStatus | undefined): string {
   if (!status) return "proposed";
+  // "Unknown" alone reads like a missing field. The provider accepted the request
+  // and never confirmed it, which is a different fact from "we do not know yet".
+  if (status === "unknown") return "Outcome unknown";
   return titleCase(status);
 }
 
@@ -177,6 +182,12 @@ export function PlanPanel({ caseFile }: { caseFile: CaseFile }) {
                 {status === "failed" && (
                   <span className="inline-flex items-center gap-1 text-[9px] text-[var(--color-danger)]">
                     <IconX className="h-2.5 w-2.5" /> connector reported failure
+                  </span>
+                )}
+                {status === "unknown" && (
+                  <span className="inline-flex items-center gap-1 text-[9px] text-[var(--color-amber)]">
+                    <IconAlert className="h-2.5 w-2.5" /> provider never confirmed; resolved by
+                    verification
                   </span>
                 )}
               </div>

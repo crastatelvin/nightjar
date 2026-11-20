@@ -84,6 +84,7 @@ class EventType(StrEnum):
     ACTION_STARTED = "action.started"
     ACTION_COMPLETED = "action.completed"
     ACTION_FAILED = "action.failed"
+    ACTION_OUTCOME_UNKNOWN = "action.outcome_unknown"
     ACTION_REPLAYED = "action.replayed"
     MANUAL_STEP_REQUIRED = "manual_step.required"
     MANUAL_STEP_ATTESTED = "manual_step.attested"
@@ -110,6 +111,9 @@ class ActionStatus(StrEnum):
     EXECUTING = "executing"
     EXECUTED = "executed"
     FAILED = "failed"
+    # The mutation may or may not have landed. Only the verification predicates,
+    # and failing those, a human looking at the provider, can settle it.
+    UNKNOWN = "unknown"
     ROLLED_BACK = "rolled_back"
     CANCELLED = "cancelled"
 

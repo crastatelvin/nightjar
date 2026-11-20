@@ -87,12 +87,17 @@ def test_a_failure_that_may_have_applied_is_not_retried(
             f"/v1/incidents/{incident['id']}/approvals/{approval['id']}",
             json={"approved": True, "comment": "go"},
         )
+        # Not "failed": the mutation may be live, and the credential check that
+        # follows is what decides. It fails, so the incident does too.
         failed = wait_for_status(client, incident["id"], {"failed"})
         assert failed["incident"]["status"] == "failed"
+        (action,) = failed["actions"]
+        assert failed["action_states"][action["id"]] == "unknown"
+        assert "may or may not have applied" in failed["incident"]["summary"]
 
         events = client.get(f"/v1/incidents/{incident['id']}/timeline").json()["events"]
-        failure = [event for event in events if event["event_type"] == "action.failed"]
-        assert failure
-        assert failure[0]["payload"]["detail"]["maybe_applied"] is True
+        unknown = [event for event in events if event["event_type"] == "action.outcome_unknown"]
+        assert unknown
+        assert unknown[0]["payload"]["detail"]["maybe_applied"] is True
 
     assert calls["count"] == 1

@@ -121,7 +121,8 @@ database was restored from an unknown point. See
 | --- | --- | --- |
 | `409` with `Retry-After` | another operator or replica holds the case lock | wait two seconds, retry; do not file a duplicate case |
 | `429` with `Retry-After` | your caller exceeded the per-process request budget | wait the number of seconds in the header |
-| action `failed`, execution has `maybe_applied: true` | the provider may have applied the change anyway (timeout after send) | check the provider directly before retrying; `POST /retry` is allowed, the executor will not duplicate a completed mutation |
+| action `unknown`, execution `unknown`, event `action.outcome_unknown` | the provider accepted the request and never answered, so the change may or may not have landed | nothing at first: Nightjar immediately runs the required predicates. If they pass, the case resolves on proof. If they fail, the case fails with the action left `unknown` — check the provider console before filing a new incident, because a retry could apply the change twice |
+| action `failed` | the provider refused the request and said so | read the execution error, fix the cause (scope, target, credential), then `POST /retry` |
 | `awaiting_manual` with no attestation possible | the attestation account is not in the approver group | ask an approver, or note the group configuration problem in the case |
 | case stuck in `verifying` | checks passed once and the stability window is still running | nothing; it resolves on its own, or fails and reopens if the check fails again |
 | `reopened` | a check failed after resolution | the case re-runs the plan; a new approval is requested if the plan changed |

@@ -25,6 +25,8 @@ function toneFor(type: string): "good" | "bad" | "info" | "wait" {
   if (type === "incident.resolved") return "good";
   if (type === "action.replayed") return "good";
   if (type === "incident.reopened" || type === "action.failed") return "bad";
+  // The mutation may have landed; it is not a failure and not good news either.
+  if (type === "action.outcome_unknown") return "wait";
   if (type.startsWith("approval") || type === "policy.decided") return "wait";
   return "info";
 }
@@ -38,6 +40,7 @@ function iconFor(type: string) {
   if (type === "policy.decided") return IconLock;
   if (type.startsWith("approval")) return IconShield;
   if (type === "action.replayed") return IconLink;
+  if (type === "action.outcome_unknown") return IconAlert;
   if (type.startsWith("action")) return IconServer;
   if (type.startsWith("verification")) return IconCheck;
   if (type === "incident.reopened") return IconAlert;
