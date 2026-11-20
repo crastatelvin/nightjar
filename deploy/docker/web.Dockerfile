@@ -4,19 +4,19 @@
 # the server-side demo proxy. NIGHTJAR_API_URL and NIGHTJAR_LAB_URL are read at
 # request time by the proxy routes.
 
-FROM node:24-alpine AS deps
+FROM node:26-alpine AS deps
 WORKDIR /app
 COPY apps/web/package.json apps/web/package-lock.json ./
 RUN npm ci --no-audit --no-fund
 
-FROM node:24-alpine AS builder
+FROM node:26-alpine AS builder
 WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1
 COPY --from=deps /app/node_modules ./node_modules
 COPY apps/web/ ./
 RUN npm run build
 
-FROM node:24-alpine AS runner
+FROM node:26-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1 \
