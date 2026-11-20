@@ -1,0 +1,63 @@
+name: Bug report
+description: Something behaved differently from the docs, or an incident ended in the wrong state.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not paste credentials, provider tokens, customer data, or evidence
+        bodies. Redact them; a shape is enough to reproduce a bug.
+
+        Security issues go to `SECURITY.md`, not this form.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: The observed behaviour, including the case state and any action or event ids.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+      description: If the incident resolved when it should not have, say what the required predicate should have seen.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: How to reproduce
+      description: Commands, connector, provider, and the smallest scenario that shows it.
+      placeholder: |
+        1. Start the lab: bash scripts/db.sh start && nightjar-lab
+        2. File site_cache_poisoned
+        3. ...
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version or commit
+      description: Output of `nightjarctl --version`, or the git SHA.
+    validations:
+      required: true
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Where
+      options:
+        - API
+        - Web UI
+        - CLI (nightjarctl / nightjar-lab)
+        - A connector
+        - Evals
+        - Docker / Compose
+        - Documentation
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs
+      description: Redacted request ids, event types, and error text. No secrets.
+      render: text

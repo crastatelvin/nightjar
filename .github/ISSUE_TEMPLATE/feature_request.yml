@@ -1,0 +1,52 @@
+name: Feature request
+description: Propose a connector, a capability, or a behaviour change.
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Nightjar is deliberately narrow: site and checkout outage, exposed
+        credential, and phishing triage, with typed actions and proof of repair.
+        Read `docs/plan/real-world-readiness.md` before proposing scope.
+  - type: textarea
+    id: problem
+    attributes:
+      label: The operator problem
+      description: What a small team cannot do today, in their words.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you propose
+      description: The action type, the provider API it maps to, and how the result would be verified.
+    validations:
+      required: true
+  - type: textarea
+    id: verification
+    attributes:
+      label: How Nightjar would prove it worked
+      description: The read-back or predicate that fails when the change did not land. A plan without proof is not mergeable.
+    validations:
+      required: true
+  - type: dropdown
+    id: scope
+    attributes:
+      label: Scope
+      options:
+        - Connector for an existing action type
+        - New action type
+        - Policy, approval, or verification behaviour
+        - UI or developer experience
+        - Documentation
+    validations:
+      required: true
+  - type: checkboxes
+    id: invariants
+    attributes:
+      label: Invariants
+      options:
+        - label: This stays inside the v1 scenario list (no arbitrary shell, no autonomous code changes, no money movement).
+          required: true
+        - label: A model still cannot execute without policy and approval, and nothing resolves without a passing predicate.
+          required: true

@@ -1305,7 +1305,7 @@ while a human step is outstanding.
 | 10.1 | PyPI publish workflow (`nightjar-ir`, `nightjarctl`) | tagged release installs | 6 |
 | 10.2 | `CHANGELOG.md`, semver tags | 0.1.0 entry | 2 |
 | 10.3 | Signed images + SBOM + provenance | cosign verify in docs | 6 |
-| 10.4 | CodeQL, Dependabot, `CODE_OF_CONDUCT`, issue templates | enabled | 4 |
+| 10.4 ✅ | CodeQL, Dependabot, `CODE_OF_CONDUCT`, issue templates (`codeql.yml`, `dependabot.yml`, `ISSUE_TEMPLATE/`) | enabled | 4 |
 | 10.5 | Docs site pass + demo recording | three-class walkthrough | 12 |
 | 10.6 | Playwright: approval click, relapse, retry | 3 new tests | 8 |
 | 10.7 | axe accessibility run + screenshot baselines | no critical violations | 6 |

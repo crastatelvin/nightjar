@@ -105,11 +105,13 @@ accept arbitrary URLs or shell strings. Register it in
 
 ## Reporting bugs and vulnerabilities
 
-Bugs: open an issue with reproduction steps and the evaluation case if one exists.
-Security issues: do not open a public issue. Follow [SECURITY.md](SECURITY.md).
+Bugs: open an issue with the reproduction template; include the case state and the
+evaluation scenario if one exists. Proposals use the feature template, which asks
+for the predicate that would prove the change worked. Security issues: do not open
+a public issue. Follow [SECURITY.md](SECURITY.md).
 
 ## Code of conduct
 
 Be direct, be kind, assume competence. Harassment and personal attacks are not
-welcome. Maintainers may remove comments or contributions that make the project
-hostile to contributors.
+welcome. The full policy, including how to report a problem and how reports are
+handled, is in [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).

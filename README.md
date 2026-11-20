@@ -364,7 +364,8 @@ OIDC issuer, no managed targets, or a stability window under 60 seconds.
 ## Contributing
 
 Apache-2.0 with the Developer Certificate of Origin. No CLA, no open-core. See
-[CONTRIBUTING.md](CONTRIBUTING.md) and [GOVERNANCE.md](GOVERNANCE.md).
+[CONTRIBUTING.md](CONTRIBUTING.md), [GOVERNANCE.md](GOVERNANCE.md), and
+[CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
 
 ## Security
 
