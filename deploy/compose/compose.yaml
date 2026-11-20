@@ -56,6 +56,10 @@ services:
       context: ../..
       dockerfile: deploy/docker/Dockerfile
     command: ["nightjar-lab", "--host", "0.0.0.0", "--port", "8100"]
+    environment:
+      # The API reaches the lab by service name; a seed carrying 127.0.0.1 would
+      # point the verifier at the API container itself.
+      NIGHTJAR_LAB_PUBLIC_URL: http://lab:8100
     ports:
       - "127.0.0.1:8100:8100"
     healthcheck:

@@ -11,6 +11,7 @@ All data is synthetic. The phishing message uses reserved ``.example`` domains.
 from __future__ import annotations
 
 import asyncio
+import os
 import secrets
 from datetime import UTC, datetime, timedelta
 from typing import Any, Literal
@@ -430,6 +431,19 @@ async def scenarios() -> dict[str, Any]:
     return {"scenarios": SCENARIOS, "variants": 6, "total": len(SCENARIOS) * 6}
 
 
+def public_base_url(request: Request) -> str:
+    """Where a client should reach this lab, which is not always where it called.
+
+    Tests and local runs hit the lab directly, so the request's own base URL is the
+    right answer. Inside Compose the incident is filed through the API container,
+    which reaches the lab at ``http://lab:8100`` while the caller on the host used
+    ``127.0.0.1``; a seed carrying the host address would point the verifier at a
+    name that does not resolve inside the network. ``NIGHTJAR_LAB_PUBLIC_URL``
+    settles that once, in the compose file, instead of rewriting seeds by hand.
+    """
+    return (os.environ.get("NIGHTJAR_LAB_PUBLIC_URL") or str(request.base_url)).rstrip("/")
+
+
 @app.post("/lab/scenario/{scenario}")
 async def inject(
     scenario: str,
@@ -442,7 +456,7 @@ async def inject(
         scenario,
         variant,
         relapse,
-        str(request.base_url).rstrip("/"),
+        public_base_url(request),
         injection,
     )
     return {
@@ -451,6 +465,7 @@ async def inject(
         "variant": variant,
         "relapse": relapse,
         "injection": injection,
+        "public_base_url": public_base_url(request),
     }
 
 

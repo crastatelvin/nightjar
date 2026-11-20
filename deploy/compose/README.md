@@ -42,6 +42,15 @@ This adds Temporal, its own PostgreSQL, and a worker. Set
 `NIGHTJAR_ORCHESTRATOR=temporal` so the API starts workflows instead of running the
 pipeline in-process.
 
+## Lab addressing
+
+The lab service advertises itself at `http://lab:8100` through
+`NIGHTJAR_LAB_PUBLIC_URL`, because the API probes it over the Compose network
+while your shell reaches it on `127.0.0.1:8100`. Without it, an injected scenario
+would carry the caller's address and the verifier inside the API container would
+probe itself. Tests that drive the lab directly do not set it and keep using the
+address they called.
+
 ## Smoke test
 
 `scripts/compose-smoke.sh` (run from the repository root, after the stack is up)
