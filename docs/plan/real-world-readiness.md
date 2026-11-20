@@ -1307,8 +1307,8 @@ while a human step is outstanding.
 | 10.3 ✅ | Signed images + SBOM + provenance (`images.yml`, `docs/supply-chain.md`) | cosign verify in docs | 6 |
 | 10.4 ✅ | CodeQL, Dependabot, `CODE_OF_CONDUCT`, issue templates (`codeql.yml`, `dependabot.yml`, `ISSUE_TEMPLATE/`) | enabled | 4 |
 | 10.5 | Docs site pass + demo recording | three-class walkthrough | 12 |
-| 10.6 | Playwright: approval click, relapse, retry | 3 new tests | 8 |
-| 10.7 | axe accessibility run + screenshot baselines | no critical violations | 6 |
+| 10.6 ✅ | Playwright: approval click, relapse, retry (`e2e/lifecycle.spec.ts`) | 3 new tests | 8 |
+| 10.7 ◐ | axe accessibility run done (`e2e/accessibility.spec.ts`, WCAG 2.1 AA, fails on critical/serious); screenshot baselines open because the UI uses system fonts and canvas motion, so cross-distro pixel gating would report false regressions | no critical violations | 6 |
 
 **Phase 10 total: ~44 h.**
 

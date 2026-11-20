@@ -136,6 +136,8 @@ export function Timeline({ events }: { events: TimelineEvent[] }) {
                   <button
                     type="button"
                     onClick={() => setExpanded(open ? null : event.id)}
+                    aria-expanded={open}
+                    aria-label={open ? "Hide event payload" : "Show event payload"}
                     className={cn(
                       "shrink-0 rounded border border-[var(--color-line)] px-1.5 py-0.5 text-[9px] text-[var(--color-dim)] transition hover:border-[#2b3a50] hover:text-[var(--color-muted)]",
                       open && "border-[rgba(200,255,114,0.25)] text-[var(--color-acid)]",

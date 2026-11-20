@@ -244,16 +244,21 @@ npm run build
 node .next/standalone/server.js
 ```
 
-The browser smoke test drives all four routes against a running stack. It needs the
-lab, the API, and the web app, plus a Chromium build:
+The browser suite drives all four routes against a running stack. It needs the lab,
+the API, and the web app, plus a Chromium build:
 
 ```bash
 npx playwright install chromium
 PLAYWRIGHT_BASE_URL=http://127.0.0.1:3001 npm run test:e2e
 ```
 
-It asserts the live stream, the fault studio, a filed case file, and the connection
-probe, so a hydration error or a stale snapshot fails CI instead of shipping.
+It asserts the live stream, the fault studio, a filed case file, the connection
+probe, and the three lifecycle interactions operators depend on: approving a plan
+executes it and resolves on proof, a fix that fails the stability window reopens the
+case, and a rejected plan can be re-investigated. A separate spec runs axe against
+each surface and fails on `critical` or `serious` WCAG 2.1 AA violations, so a
+hydration error, a stale snapshot, an unlabelled icon button, or a contrast
+regression fails CI instead of shipping.
 
 When the API enforces a token, add the UI origin to `NIGHTJAR_CORS_ORIGINS`
 (comma-separated or a JSON list). Compose starts the UI at
