@@ -39,7 +39,7 @@ jobs:
       NIGHTJAR_TEST_DATABASE_URL: postgresql+asyncpg://nightjar:nightjar@127.0.0.1:5432/nightjar_test
       NIGHTJAR_ENVIRONMENT: test
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: astral-sh/setup-uv@v6
         with:
@@ -65,7 +65,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: astral-sh/setup-uv@v6
         with:
@@ -90,7 +90,7 @@ jobs:
     env:
       OPA_VERSION: v1.22.2
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install OPA
         run: |
@@ -139,7 +139,7 @@ jobs:
       NIGHTJAR_TEST_DATABASE_URL: postgresql+asyncpg://nightjar:nightjar@127.0.0.1:5432/nightjar_test
       NIGHTJAR_ENVIRONMENT: test
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install PostgreSQL 18 client
         run: |
@@ -188,7 +188,7 @@ jobs:
       NIGHTJAR_EVAL_DATABASE_URL: postgresql+asyncpg://nightjar:nightjar@127.0.0.1:5432/nightjar_eval
       NIGHTJAR_ENVIRONMENT: test
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: astral-sh/setup-uv@v6
         with:
@@ -218,7 +218,7 @@ jobs:
       run:
         working-directory: apps/web
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-node@v4
         with:
@@ -267,7 +267,7 @@ jobs:
       NIGHTJAR_CRITIC_PROVIDER: mock
       NEXT_TELEMETRY_DISABLED: "1"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: astral-sh/setup-uv@v6
         with:
@@ -352,7 +352,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: docker/setup-buildx-action@v3
 
@@ -381,7 +381,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 35
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: docker/setup-buildx-action@v3
 
