@@ -109,6 +109,17 @@ To turn it on earlier, enable code scanning in the repository settings and set t
 `NIGHTJAR_CODE_SCANNING` repository variable to `true`. Until then, `ruff`, `mypy`,
 and the test suite are the checks that run on every change.
 
+## Runtime lines
+
+The container images run the same Python and Node versions the repository tests:
+Python 3.14, as pinned in `PYTHON_VERSION`, `requires-python`, and the release job;
+Node 24, as used by the local toolchain in `.tools/`. A base-image major bump is
+therefore not a dependency update - it changes the interpreter and the standard
+library the product actually runs on, and has to move `pyproject.toml`, the CI
+matrix, the release job, and the local toolchain in one change. Dependabot is
+configured to ignore base-image majors and to keep sending patch and minor updates,
+which is where the fixes are.
+
 ## Limits
 
 - Signing proves origin, not safety. A signed image can still contain a vulnerable

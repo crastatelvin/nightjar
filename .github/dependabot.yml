@@ -41,3 +41,14 @@ updates:
       day: monday
     commit-message:
       prefix: "deps(image)"
+    ignore:
+      # The images run the interpreter and the Node version that CI tests and the
+      # development toolchain uses (`.github/workflows/ci.yml`, `.tools/`, README).
+      # Moving a runtime line is a deliberate change that has to update pyproject,
+      # the CI matrix, and the local toolchain together, so a base-image major bump
+      # is not a dependency update a bot can make on its own. Patch and minor
+      # updates - the ones that carry fixes - still arrive weekly.
+      - dependency-name: "python"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "node"
+        update-types: ["version-update:semver-major"]
