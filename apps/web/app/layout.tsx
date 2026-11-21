@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import { inter, jetbrainsMono } from "./fonts";
 import { AmbientCanvas } from "@/components/ambient-background";
 import { CursorGlow } from "@/components/cursor-glow";
 import { AppShell } from "@/components/app-shell";
@@ -31,7 +32,11 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html
+      lang="en"
+      className={`${inter.variable} ${jetbrainsMono.variable}`}
+      suppressHydrationWarning
+    >
       <body>
         <AmbientCanvas />
         <CursorGlow />

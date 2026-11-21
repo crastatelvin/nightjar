@@ -227,6 +227,12 @@ four surfaces:
   injection corpus or a relapse, then follow the same seven-stage loop
 - `/settings` — connection and safety: API base, bearer token, actor, action catalogue
 
+The interface ships its own typefaces: Inter and JetBrains Mono are vendored in
+`apps/web/app/fonts/` (SIL OFL 1.1, versions and hashes recorded in the README beside
+them) and loaded through `next/font/local`. Nothing on any page is fetched from a
+third-party origin, which is what lets the UI render on an incident host with no
+egress, and it means typography is the same on every operator's machine.
+
 The browser calls `http://127.0.0.1:8000` by default. Change it in Settings; the value
 is stored in that browser profile only. The fault studio calls the lab and API from a
 Next.js route so the lab does not need CORS. Configure that proxy with:
@@ -258,7 +264,14 @@ executes it and resolves on proof, a fix that fails the stability window reopens
 case, and a rejected plan can be re-investigated. A separate spec runs axe against
 each surface and fails on `critical` or `serious` WCAG 2.1 AA violations, so a
 hydration error, a stale snapshot, an unlabelled icon button, or a contrast
-regression fails CI instead of shipping.
+regression fails CI instead of shipping. A third spec proves the pages render in the
+bundled families and request nothing off-host.
+
+Every run also uploads full-page screenshots of each surface at desktop and phone
+width as the `nightjar-screenshots` artifact. They are for review rather than
+comparison: the background is an animated canvas and the layout is dense sub-pixel
+type, so a committed pixel baseline would encode the rasterizer of whichever machine
+generated it rather than anything about the product.
 
 When the API enforces a token, add the UI origin to `NIGHTJAR_CORS_ORIGINS`
 (comma-separated or a JSON list). Compose starts the UI at
