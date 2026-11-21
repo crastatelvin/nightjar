@@ -31,7 +31,7 @@ dependencies = [
   "pyjwt[crypto]>=2.10,<3",
   "pyyaml>=6.0,<7",
   "sqlalchemy[asyncio]>=2.1,<3",
-  "structlog>=25.4,<26",
+  "structlog>=26.1,<27",
   "temporalio>=1.35,<2",
   "uvicorn[standard]>=0.38,<1",
 ]
@@ -44,7 +44,7 @@ otel = [
   "opentelemetry-exporter-otlp-proto-http>=1.45,<2",
 ]
 dev = [
-  "mypy>=1.19,<2",
+  "mypy>=2.4,<3",
   # The SDK and the OTLP exporter arrive with the `otel` extra in deployment; the
   # tests need both to assert what is exported and that the real constructor works.
   "opentelemetry-sdk>=1.45,<2",
