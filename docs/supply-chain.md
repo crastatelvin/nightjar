@@ -94,6 +94,21 @@ bytes or fails, rather than silently running a new `latest`. Update the digest a
 part of a release, review the diff, and keep the previous digest recorded in the
 case file of the change that deployed it.
 
+## Static analysis
+
+`.github/workflows/codeql.yml` runs CodeQL with the `security-extended` query pack over
+the Python package and the Next.js app on every push to `main`, every pull request,
+and a weekly schedule. `security-extended` is the pack that is still precise enough to
+gate a merge; `security-and-quality` is noisy enough that a small team stops reading
+it.
+
+Publishing SARIF requires either a public repository or GitHub Advanced Security on a
+private one. Nightjar is private until 0.1, so the job skips rather than failing on a
+permission error while that is true; on a public repository it gates automatically.
+To turn it on earlier, enable code scanning in the repository settings and set the
+`NIGHTJAR_CODE_SCANNING` repository variable to `true`. Until then, `ruff`, `mypy`,
+and the test suite are the checks that run on every change.
+
 ## Limits
 
 - Signing proves origin, not safety. A signed image can still contain a vulnerable
