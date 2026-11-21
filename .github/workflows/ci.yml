@@ -336,6 +336,17 @@ jobs:
         env:
           PLAYWRIGHT_BASE_URL: http://127.0.0.1:3000
 
+      - name: Upload screenshots
+        # Every run, not just failures: the point is to see what the change did to
+        # the interface, and a passing run is where most visual changes land.
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: nightjar-screenshots
+          path: apps/web/test-results/screenshots
+          if-no-files-found: ignore
+          retention-days: 7
+
       - name: Upload report
         if: failure()
         uses: actions/upload-artifact@v7

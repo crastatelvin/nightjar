@@ -1308,7 +1308,7 @@ while a human step is outstanding.
 | 10.4 ✅ | CodeQL, Dependabot, `CODE_OF_CONDUCT`, issue templates (`codeql.yml`, `dependabot.yml`, `ISSUE_TEMPLATE/`) | enabled; CodeQL gates once the repository is public (SARIF upload needs GHAS on a private repo), documented in `docs/supply-chain.md` | 4 |
 | 10.5 | Docs site pass + demo recording | three-class walkthrough | 12 |
 | 10.6 ✅ | Playwright: approval click, relapse, retry (`e2e/lifecycle.spec.ts`) | 3 new tests | 8 |
-| 10.7 ◐ | axe accessibility run done (`e2e/accessibility.spec.ts`, WCAG 2.1 AA, fails on critical/serious); screenshot baselines open because the UI uses system fonts and canvas motion, so cross-distro pixel gating would report false regressions | no critical violations | 6 |
+| 10.7 ✅ | axe gate (`e2e/accessibility.spec.ts`, WCAG 2.1 AA, fails on critical/serious), self-hosted Inter/JetBrains Mono (`app/fonts/`), on-host request assertion (`e2e/typography.spec.ts`), and screenshot artifacts at desktop/phone width (`e2e/visual.spec.ts` + `nightjar-screenshots`). Pixel diffing is deliberately not gated: the background is an animated canvas and the type is dense sub-pixel, so a committed baseline would encode the rasterizer of the machine that made it | no critical violations; screenshots reviewed per run | 6 |
 
 **Phase 10 total: ~44 h.**
 
