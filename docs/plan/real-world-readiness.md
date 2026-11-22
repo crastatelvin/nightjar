@@ -1,7 +1,9 @@
 # Real-world readiness plan
 
-- Status: execution plan
-- Date: 2026-11-13
+- Status: execution plan — phases 6–7 and 9–10 shipped; phase 8 (recorded hosted-model
+  baselines, cost/latency budgets, nightly evals) is the remaining pre-0.1 work and is
+  blocked on provider API keys
+- Date: 2026-11-13 (updated 2026-11-22)
 - Target: Nightjar 0.1 — a self-hosted incident responder that closes the loop against real provider accounts
 - Related: [ROADMAP.md](../../ROADMAP.md), [architecture](../architecture.md), [threat model](../security/threat-model.md)
 
