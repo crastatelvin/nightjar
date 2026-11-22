@@ -14,6 +14,11 @@
  *   PLAYWRIGHT_BASE_URL      web app (default http://127.0.0.1:3001)
  *   PLAYWRIGHT_BROWSERS_PATH where the Chromium build lives, if not the default
  *
+ * Lab state is reset at the start (DEMO_KEEP_LAB=1 keeps it). The command deck reads
+ * the control plane's database rather than the lab, so record a published capture
+ * against a freshly migrated database; otherwise the counters and the decision queue
+ * still show every incident the dev machine has ever filed.
+ *
  * The raw capture is deliberately written at 1x and 1280x720. The anvil background is
  * a particle field over film grain, which compresses badly; `scripts/encode-demo.sh`
  * is the second pass that turns the capture into the committed asset.
@@ -28,6 +33,7 @@ import { chromium } from "@playwright/test";
 const here = dirname(fileURLToPath(import.meta.url));
 const output = resolve(here, "../../../docs/assets/demo-raw.webm");
 const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? "http://127.0.0.1:3001";
+const labURL = (process.env.NIGHTJAR_LAB_URL ?? "http://127.0.0.1:8100").replace(/\/$/, "");
 const videoDir = join(here, "../.demo-video");
 
 /**
@@ -138,6 +144,10 @@ async function tap(page, locator, settle = 600) {
   await aim(page, locator);
   await page.evaluate(() => window.__njDemoTap?.());
   await locator.click({ timeout: 30_000 });
+  // The real pointer is what drives hover states and native tooltips, and Playwright
+  // leaves it parked on whatever it just clicked. Move it off the navigation chrome so
+  // a "Command deck" tooltip does not sit in the closing shot.
+  await page.mouse.move(640, 706);
   await sleep(settle);
 }
 
@@ -189,6 +199,14 @@ async function runScenario(page, { card, text }) {
 }
 
 const main = async () => {
+  // The deck counts what the lab has seen, so a recording on a lab full of test runs
+  // opens on a wall of old incidents. Start from zero unless the caller wants the state.
+  if (process.env.DEMO_KEEP_LAB !== "1") {
+    const reset = await fetch(`${labURL}/lab/reset`, { method: "POST" });
+    if (!reset.ok) throw new Error(`lab reset failed (${reset.status})`);
+    step("lab reset");
+  }
+
   await rm(videoDir, { recursive: true, force: true });
   await mkdir(videoDir, { recursive: true });
   await mkdir(dirname(output), { recursive: true });
@@ -228,11 +246,14 @@ const main = async () => {
     });
 
     step("closing shot");
-    await tap(page, page.getByRole("link", { name: "Command deck" }).first(), 1400);
+    await tap(page, page.getByRole("link", { name: "Command deck" }).first(), 600);
+    // The deck fetches its counters when it mounts, so arriving from the last case file
+    // would capture the snapshot from before that case resolved. Reload once, then hold.
+    await page.reload({ waitUntil: "networkidle" });
     await page.evaluate(() => window.__njDemoPoint?.(640, 320));
-    await sleep(1800);
+    await sleep(1400);
     await caption(page, "Three classes. One loop. Every resolution carries a proof.");
-    await sleep(2800);
+    await sleep(3600);
 
     await context.close();
     await video.saveAs(output);
