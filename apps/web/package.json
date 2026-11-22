@@ -8,7 +8,9 @@
     "start": "next start",
     "typecheck": "tsc --noEmit",
     "test:e2e": "playwright test",
-    "test:e2e:report": "playwright show-report"
+    "test:e2e:report": "playwright show-report",
+    "demo:record": "node scripts/record-demo.mjs",
+    "demo:encode": "bash scripts/encode-demo.sh"
   },
   "dependencies": {
     "next": "16.4.6",

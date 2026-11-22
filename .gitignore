@@ -23,5 +23,9 @@ htmlcov/
 # Generated evaluation reports are local artifacts.
 evals/reports/
 
+# Raw screen capture and encoder scratch. Only the encoded walkthrough is committed.
+docs/assets/demo-raw.webm
+apps/web/.demo-video/
+
 # Local database dumps written by scripts/pg-backup.sh. Never commit a ledger.
 backups/
