@@ -120,9 +120,13 @@ class Settings(BaseSettings):
     critic_api_key: str | None = None
     critic_base_url: str | None = None
 
-    max_investigation_tool_calls: int = 20
-    max_investigation_seconds: int = 360
-    max_cost_usd: float = 0.75
+    # Deterministic evidence collection is bounded by tool calls; the model loop
+    # (triage through plan) is bounded by cost, wall clock and call count. Any
+    # ceiling ends the incident with a budget event instead of an open-ended run.
+    max_investigation_tool_calls: int = Field(default=20, ge=1)
+    max_investigation_seconds: int = Field(default=360, ge=1)
+    max_agent_calls: int = Field(default=8, ge=1)
+    max_cost_usd: float = Field(default=0.75, gt=0)
     approval_ttl_seconds: int = 1800
     stability_seconds: int = 900
     # A connector call is retried only when repeating it cannot duplicate a

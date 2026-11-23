@@ -10,14 +10,16 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from dataclasses import dataclass
 from datetime import timedelta
+from functools import partial
 from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncEngine
 
+from nightjar.agents.budget import Budget, BudgetExceeded
 from nightjar.agents.types import (
     AgentRuntime,
     CritiqueInput,
@@ -81,10 +83,6 @@ log = logging.getLogger(__name__)
 
 
 class ServiceError(RuntimeError):
-    pass
-
-
-class BudgetExceeded(ServiceError):
     pass
 
 
@@ -306,9 +304,10 @@ class IncidentService:
         incident = await self.repo.get_incident(incident_id)
         if incident.status not in {IncidentStatus.INTAKE, IncidentStatus.REOPENED}:
             return
+        budget = self._new_budget()
         try:
             await self._set_status(incident, IncidentStatus.INVESTIGATING, "pipeline started")
-            bundle = await self._investigate(incident)
+            bundle = await self._investigate(incident, budget)
             if (
                 bundle.critique.overall.value == "contradicted"
                 or not bundle.findings
@@ -319,14 +318,13 @@ class IncidentService:
                     "investigation did not produce a supported, classifiable finding",
                 )
                 return
-            plan = await self._plan(incident, bundle)
+            plan = await self._plan(incident, bundle, budget)
             if plan is None:
                 return
             incident = await self.repo.get_incident(incident_id)
             await self._gate_and_execute(incident, plan, bundle)
         except BudgetExceeded as exc:
-            log.warning("incident %s exceeded its budget: %s", incident_id, exc)
-            await self._fail(incident_id, str(exc))
+            await self._record_budget_stop(incident_id, exc, budget)
         except (ServiceError, ActionValidationError) as exc:
             log.warning("incident %s failed: %s", incident_id, exc)
             await self._fail(incident_id, str(exc))
@@ -486,7 +484,62 @@ class IncidentService:
             )
         )
 
-    async def _investigate(self, incident: Incident) -> Any:
+    def _new_budget(self) -> Budget:
+        return Budget(
+            max_cost_usd=self.settings.max_cost_usd,
+            max_seconds=float(self.settings.max_investigation_seconds),
+            max_calls=self.settings.max_agent_calls,
+        )
+
+    async def _record_budget_stop(
+        self, incident_id: str, exc: BudgetExceeded, budget: Budget
+    ) -> None:
+        log.warning("incident %s exceeded its budget: %s", incident_id, exc)
+        await self.repo.append_event(
+            incident_id,
+            EventType.BUDGET_EXCEEDED,
+            actor="orchestrator",
+            payload={
+                "limit": exc.limit,
+                "observed": round(exc.observed, 3),
+                "ceiling": exc.ceiling,
+                "reason": str(exc),
+                **budget.snapshot(),
+            },
+        )
+        await self._fail(incident_id, str(exc))
+
+    async def _model_call(
+        self,
+        budget: Budget,
+        incident_id: str,
+        role: str,
+        call: Callable[[], Awaitable[Any]],
+    ) -> Any:
+        """Run one model role inside the incident's budget.
+
+        The check happens before the call and the charge after it, so the run
+        stops between roles rather than mid-plan. The call itself is bounded by
+        the time remaining, which turns the wall-clock ceiling into a real stop
+        instead of a check that a slow provider can overshoot by one timeout.
+        """
+        budget.ensure_can_start(role)
+        try:
+            outcome = await asyncio.wait_for(call(), timeout=budget.remaining_seconds)
+        except TimeoutError as exc:
+            elapsed = budget.elapsed_seconds
+            raise BudgetExceeded(
+                f"model budget exceeded: {elapsed:.0f} s elapsed against a "
+                f"{budget.max_seconds:.0f} s ceiling during {role}",
+                limit="seconds",
+                observed=elapsed,
+                ceiling=budget.max_seconds,
+            ) from exc
+        await self._record_agent(incident_id, role, outcome)
+        budget.charge(role, outcome.cost_usd)
+        return outcome
+
+    async def _investigate(self, incident: Incident, budget: Budget) -> Any:
         from nightjar.agents.types import InvestigationBundle
 
         env = self._environment(incident)
@@ -494,10 +547,12 @@ class IncidentService:
         seen: set[str] = set()
         evidence.extend(await self._collect_round(incident, self._initial_probes(incident), seen))
 
-        cost = 0.0
-        triage_outcome = await self.runtime.triage(TriageInput(incident=incident, environment=env))
-        await self._record_agent(incident.id, "triage", triage_outcome)
-        cost += triage_outcome.cost_usd
+        triage_outcome = await self._model_call(
+            budget,
+            incident.id,
+            "triage",
+            lambda: self.runtime.triage(TriageInput(incident=incident, environment=env)),
+        )
         triage: TriageResult = triage_outcome.output
         incident = await self.repo.update_incident(
             incident.id,
@@ -516,23 +571,20 @@ class IncidentService:
         findings: list[Finding] = []
         available = self.registry.tools()
         for round_number in (1, 2):
-            outcome = await self.runtime.investigate(
-                InvestigationInput(
-                    incident=incident,
-                    triage=triage,
-                    evidence=evidence,
-                    environment=env,
-                    round=round_number,
-                    available_tools=available,
-                )
+            request = InvestigationInput(
+                incident=incident,
+                triage=triage,
+                evidence=evidence,
+                environment=env,
+                round=round_number,
+                available_tools=available,
             )
-            await self._record_agent(incident.id, "investigator", outcome)
-            cost += outcome.cost_usd
-            if cost > self.settings.max_cost_usd:
-                raise BudgetExceeded(
-                    f"investigation cost ${cost:.2f} exceeded the "
-                    f"${self.settings.max_cost_usd:.2f} ceiling"
-                )
+            outcome = await self._model_call(
+                budget,
+                incident.id,
+                "investigator",
+                partial(self.runtime.investigate, request),
+            )
             output = outcome.output
             findings.extend(output.findings)
             if not output.probes or round_number == 2:
@@ -542,11 +594,14 @@ class IncidentService:
                 break
             evidence.extend(new_evidence)
 
-        critique_outcome = await self.runtime.critique(
-            CritiqueInput(incident=incident, findings=findings, evidence=evidence)
+        critique_outcome = await self._model_call(
+            budget,
+            incident.id,
+            "critic",
+            lambda: self.runtime.critique(
+                CritiqueInput(incident=incident, findings=findings, evidence=evidence)
+            ),
         )
-        await self._record_agent(incident.id, "critic", critique_outcome)
-        cost += critique_outcome.cost_usd
         critique: Critique = critique_outcome.output
 
         self._apply_verdicts(findings, critique)
@@ -564,7 +619,7 @@ class IncidentService:
             findings=findings,
             critique=critique,
             evidence=evidence,
-            cost_usd=cost,
+            cost_usd=budget.cost_usd,
         )
 
     @staticmethod
@@ -611,19 +666,23 @@ class IncidentService:
                 bound.append(action)
         return bound, ambiguous
 
-    async def _plan(self, incident: Incident, bundle: Any) -> ActionPlan | None:
-        outcome = await self.runtime.plan(
-            PlanInput(
-                incident=incident,
-                triage=bundle.triage,
-                findings=bundle.findings,
-                critique=bundle.critique,
-                evidence=bundle.evidence,
-                environment=self._environment(incident),
-                capabilities=available_actions(self.registry.connectors),
-            )
+    async def _plan(self, incident: Incident, bundle: Any, budget: Budget) -> ActionPlan | None:
+        outcome = await self._model_call(
+            budget,
+            incident.id,
+            "planner",
+            lambda: self.runtime.plan(
+                PlanInput(
+                    incident=incident,
+                    triage=bundle.triage,
+                    findings=bundle.findings,
+                    critique=bundle.critique,
+                    evidence=bundle.evidence,
+                    environment=self._environment(incident),
+                    capabilities=available_actions(self.registry.connectors),
+                )
+            ),
         )
-        await self._record_agent(incident.id, "planner", outcome)
         plan: ActionPlan = outcome.output
         unavailable = unavailable_actions(plan.actions, self.registry.connectors)
         if unavailable:

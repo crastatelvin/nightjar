@@ -91,6 +91,7 @@ class EventType(StrEnum):
     VERIFICATION_COMPLETED = "verification.completed"
     INCIDENT_RESOLVED = "incident.resolved"
     INCIDENT_REOPENED = "incident.reopened"
+    BUDGET_EXCEEDED = "incident.budget_exceeded"
     NOTE = "note"
 
 

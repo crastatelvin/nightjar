@@ -10,7 +10,7 @@ from __future__ import annotations
 from temporalio import activity
 
 from nightjar.api.main import build_service
-from nightjar.api.service import IncidentService
+from nightjar.api.service import BudgetExceeded, IncidentService
 from nightjar.api.settings import get_settings
 from nightjar.core.enums import ActionStatus, IncidentClass, IncidentStatus
 
@@ -35,18 +35,23 @@ async def investigate_and_plan(incident_id: str) -> str:
     await service._set_status(
         incident, IncidentStatus.INVESTIGATING, "workflow investigation started"
     )
-    bundle = await service._investigate(incident)
-    if (
-        bundle.critique.overall.value == "contradicted"
-        or not bundle.findings
-        or bundle.triage.incident_class is IncidentClass.UNKNOWN
-    ):
-        await service._fail(
-            incident_id,
-            "investigation did not produce a supported, classifiable finding",
-        )
+    budget = service._new_budget()
+    try:
+        bundle = await service._investigate(incident, budget)
+        if (
+            bundle.critique.overall.value == "contradicted"
+            or not bundle.findings
+            or bundle.triage.incident_class is IncidentClass.UNKNOWN
+        ):
+            await service._fail(
+                incident_id,
+                "investigation did not produce a supported, classifiable finding",
+            )
+            return "failed"
+        plan = await service._plan(incident, bundle, budget)
+    except BudgetExceeded as exc:
+        await service._record_budget_stop(incident_id, exc, budget)
         return "failed"
-    plan = await service._plan(incident, bundle)
     if plan is None:
         return "failed"
     incident = await service.repo.get_incident(incident_id)

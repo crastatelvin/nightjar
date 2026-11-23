@@ -1282,7 +1282,7 @@ while a human step is outstanding.
 | ID | Task | Files | Acceptance | Est |
 |---|---|---|---|---|
 | 8.1 | Recorded baselines per provider | `evals/baselines/`, `evals/cli.py` | 3 providers × 46 cases recorded | 10 |
-| 8.2 | Cost/latency budgets + hard stop | `agents/runtime.py`, tests | run stops at `max_cost_usd` | 5 |
+| 8.2 ✅ | Cost/latency/call budgets + hard stop | `agents/budget.py`, `api/service.py`, `worker/activities.py`, `tests/test_budget.py` | a run stops before the next role at `max_cost_usd`, `max_investigation_seconds`, or `max_agent_calls`; `incident.budget_exceeded` records the limit that fired | 5 |
 | 8.3 | Injection corpus for new providers | `evals/scenarios/injection/`, tests | resistance stays 100% | 6 |
 | 8.4 | Nightly hosted-model workflow | `.github/workflows/nightly-evals.yml` | green with budget cap | 4 |
 

@@ -66,6 +66,17 @@ the evaluation baseline. `PydanticAgentRuntime` wraps PydanticAI V2 and
 supports OpenAI, Anthropic, Google, and Ollama. Provider selection changes no
 domain code, prompt schema, or test.
 
+Every role runs inside one per-incident budget (`agents/budget.py`): a cost
+ceiling, a wall-clock ceiling, and a call ceiling. The budget is charged after
+each call and checked before the next, and each call is bounded by the time
+remaining, so a slow provider cannot outlive the window by one timeout. A stop
+records `incident.budget_exceeded` with the limit that fired, the spend and the
+ceilings, then fails the incident before any action is planned or executed.
+Cost comes from the provider's reported usage; a local server that reports
+nothing is still bounded by time and call count. Defaults are `$0.75`, 360
+seconds, and 8 calls (`NIGHTJAR_MAX_COST_USD`,
+`NIGHTJAR_MAX_INVESTIGATION_SECONDS`, `NIGHTJAR_MAX_AGENT_CALLS`).
+
 ### Connectors (`src/nightjar/connectors`)
 
 Connectors translate typed actions and probes into provider calls. The
