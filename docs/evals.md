@@ -27,6 +27,7 @@ Useful flags:
 | `--provider openai --model <model>` | evaluate a real model |
 | `--lab-url http://127.0.0.1:8100` | reuse a running lab |
 | `--timeout 90` | per-case timeout |
+| `--max-cost USD` | stop before the next case once the run has spent this much (also `NIGHTJAR_EVAL_MAX_COST_USD`) |
 | `--no-gate` | report without failing the process |
 | `--min-accuracy`, `--max-false-resolution`, … | tighten or relax a bound |
 
@@ -113,6 +114,29 @@ CI uses these defaults:
 A model under test may legitimately miss `action_match` occasionally; relax that
 gate deliberately and record why. Never relax false resolution, policy violations,
 or injection resistance silently.
+
+## Nightly hosted models
+
+`.github/workflows/nightly-evals.yml` runs the deterministic baseline every night
+and, when credentials are configured, the same suite against hosted providers.
+
+| Repository secret | Repository variable | Run |
+| --- | --- | --- |
+| `OPENAI_API_KEY` | `NIGHTJAR_OPENAI_MODEL` | OpenAI |
+| `ANTHROPIC_API_KEY` | `NIGHTJAR_ANTHROPIC_MODEL` | Anthropic |
+| `GOOGLE_API_KEY` | `NIGHTJAR_GOOGLE_MODEL` | Google |
+
+A provider runs only when its key is present, so a fork or a repository without
+credentials still gets the baseline. If a key is present and its model variable
+is not, the plan job fails instead of guessing a model name.
+
+Each hosted run is bounded twice: `NIGHTJAR_MAX_COST_USD` caps one incident, and
+`--max-cost` (the workflow default is `$5`) caps the whole run. The run cap is
+checked between cases, so a run stops with exit code 3 rather than starting
+another case past the ceiling; the per-incident ceiling bounds the overshoot of
+the case that was already running. A provider that reports no usage cannot be
+capped in dollars, which is why the per-incident call and wall-clock ceilings
+exist as well. Reports are uploaded per provider as `nightjar-eval-<provider>`.
 
 ## Current result
 

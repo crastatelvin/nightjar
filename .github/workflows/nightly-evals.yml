@@ -1,0 +1,196 @@
+name: nightly evals
+
+on:
+  schedule:
+    # A fixed time, not "every night at midnight": a queue of identical runs is
+    # not more evidence, and a predictable slot makes a missing run obvious.
+    - cron: "17 6 * * *"
+  workflow_dispatch:
+    inputs:
+      providers:
+        description: "Comma-separated hosted providers to run (openai, anthropic, google)"
+        default: "openai,anthropic,google"
+      max_cost_usd:
+        description: "Hard cap for one provider's whole run, in USD"
+        default: "5.00"
+
+concurrency:
+  group: nightly-evals
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  PYTHON_VERSION: "3.14"
+  MAX_COST_USD: ${{ inputs.max_cost_usd || '5.00' }}
+  PROVIDERS: ${{ inputs.providers || 'openai,anthropic,google' }}
+
+jobs:
+  baseline:
+    name: deterministic baseline
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: nightjar
+          POSTGRES_PASSWORD: nightjar
+          POSTGRES_DB: nightjar_eval
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U nightjar -d nightjar_eval"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
+    env:
+      NIGHTJAR_EVAL_DATABASE_URL: postgresql+asyncpg://nightjar:nightjar@127.0.0.1:5432/nightjar_eval
+      NIGHTJAR_ENVIRONMENT: test
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install
+        run: uv sync --extra dev
+
+      - name: Run every suite with gates
+        run: uv run nightjar-eval --suite all --output-dir "$RUNNER_TEMP/evals"
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: nightjar-eval-mock
+          path: ${{ runner.temp }}/evals
+          if-no-files-found: warn
+          retention-days: 14
+
+  plan:
+    name: choose hosted providers
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.matrix.outputs.matrix }}
+    steps:
+      - id: matrix
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+          OPENAI_MODEL: ${{ vars.NIGHTJAR_OPENAI_MODEL }}
+          ANTHROPIC_MODEL: ${{ vars.NIGHTJAR_ANTHROPIC_MODEL }}
+          GOOGLE_MODEL: ${{ vars.NIGHTJAR_GOOGLE_MODEL }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          import sys
+
+          providers = {
+              "openai": ("OPENAI", os.environ.get("OPENAI_MODEL", "").strip()),
+              "anthropic": ("ANTHROPIC", os.environ.get("ANTHROPIC_MODEL", "").strip()),
+              "google": ("GOOGLE", os.environ.get("GOOGLE_MODEL", "").strip()),
+          }
+          wanted = [p.strip() for p in os.environ.get("PROVIDERS", "").split(",") if p.strip()]
+          unknown = sorted(set(wanted) - set(providers))
+          if unknown:
+              print(f"::error::unknown provider(s): {', '.join(unknown)}")
+              sys.exit(1)
+
+          entries = []
+          for provider in wanted:
+              prefix, model = providers[provider]
+              if not os.environ.get(f"{prefix}_API_KEY"):
+                  print(f"{provider}: no key, skipping")
+                  continue
+              if not model:
+                  # A key without a model is a half-configured secret. Guessing a
+                  # model name would make the nightly fail later and less clearly.
+                  print(f"::error::{provider}: {prefix}_API_KEY is set but the "
+                        f"NIGHTJAR_{prefix}_MODEL repository variable is not")
+                  sys.exit(1)
+              entries.append({"provider": provider, "model": model})
+
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as handle:
+              handle.write(f"matrix={json.dumps(entries)}\n")
+          print(f"hosted providers: {[entry['provider'] for entry in entries] or 'none'}")
+          PY
+
+  hosted:
+    name: hosted ${{ matrix.provider }}
+    needs: plan
+    if: needs.plan.outputs.matrix != '' && needs.plan.outputs.matrix != '[]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: nightjar
+          POSTGRES_PASSWORD: nightjar
+          POSTGRES_DB: nightjar_eval
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U nightjar -d nightjar_eval"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
+    env:
+      NIGHTJAR_EVAL_DATABASE_URL: postgresql+asyncpg://nightjar:nightjar@127.0.0.1:5432/nightjar_eval
+      NIGHTJAR_ENVIRONMENT: test
+      # A single incident cannot spend more than this, so the run cap cannot be
+      # consumed by one runaway plan.
+      NIGHTJAR_MAX_COST_USD: "0.10"
+      NIGHTJAR_MAX_INVESTIGATION_SECONDS: "300"
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install
+        run: uv sync --extra dev --extra anthropic --extra google
+
+      - name: Evaluate ${{ matrix.provider }}
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+        run: |
+          case "${{ matrix.provider }}" in
+            openai) key="$OPENAI_API_KEY" ;;
+            anthropic) key="$ANTHROPIC_API_KEY" ;;
+            google) key="$GOOGLE_API_KEY" ;;
+            *)
+              echo "::error::unknown provider ${{ matrix.provider }}"
+              exit 2
+              ;;
+          esac
+          export NIGHTJAR_MODEL_API_KEY="$key"
+          export NIGHTJAR_CRITIC_API_KEY="$key"
+          uv run nightjar-eval --suite all \
+            --provider "${{ matrix.provider }}" \
+            --model "${{ matrix.model }}" \
+            --max-cost "$MAX_COST_USD" \
+            --output-dir "$RUNNER_TEMP/evals"
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: nightjar-eval-${{ matrix.provider }}
+          path: ${{ runner.temp }}/evals
+          if-no-files-found: warn
+          retention-days: 30

@@ -16,6 +16,7 @@ from nightjar.evals.labserver import LabProcess
 from nightjar.evals.report import GateThresholds, evaluate_gates, write_reports
 from nightjar.evals.runner import (
     DEFAULT_EVAL_DATABASE_URL,
+    RunBudgetExceeded,
     ensure_schema,
     run_by_stability_group,
     summarize,
@@ -23,6 +24,17 @@ from nightjar.evals.runner import (
 
 SUITES = ("cornershop-30", "relapse-6", "injection-10")
 PROVIDERS = ("mock", "openai", "anthropic", "google", "ollama")
+MAX_COST_ENV = "NIGHTJAR_EVAL_MAX_COST_USD"
+
+
+def _env_cost() -> float | None:
+    raw = os.environ.get(MAX_COST_ENV)
+    if raw is None or not raw.strip():
+        return None
+    try:
+        return float(raw)
+    except ValueError as exc:
+        raise ValueError(f"{MAX_COST_ENV} must be a number, not {raw!r}") from exc
 
 
 async def _ensure_database(database_url: str) -> None:
@@ -103,6 +115,16 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--min-action-match", type=float, default=1.0)
     parser.add_argument("--min-approval-accuracy", type=float, default=1.0)
     parser.add_argument(
+        "--max-cost",
+        type=float,
+        default=None,
+        metavar="USD",
+        help=(
+            "stop before the next case once the run has spent this much "
+            f"(default: ${MAX_COST_ENV} when set, otherwise no run cap)"
+        ),
+    )
+    parser.add_argument(
         "--no-gate",
         action="store_true",
         help="do not fail the command when a gate threshold is missed",
@@ -117,6 +139,16 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    max_cost = args.max_cost
+    if max_cost is None:
+        try:
+            max_cost = _env_cost()
+        except ValueError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 2
+    if max_cost is not None and max_cost <= 0:
+        print("error: --max-cost must be greater than zero", file=sys.stderr)
+        return 2
     suites = list(SUITES) if "all" in args.suite else args.suite
     manifest_path = args.scenarios or default_manifest_path()
     if manifest_path is None:
@@ -149,6 +181,8 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Nightjar eval: {len(cases)} case(s) from {manifest_path}")
         print(f"Lab: {lab_url}")
         print(f"Provider: {args.provider} / {args.model}")
+        if max_cost is not None:
+            print(f"Run cap: ${max_cost:.2f}")
     try:
         scores = run_by_stability_group(
             cases,
@@ -157,7 +191,11 @@ def main(argv: list[str] | None = None) -> int:
             provider=args.provider,
             model=args.model,
             timeout=args.timeout,
+            max_cost_usd=max_cost,
         )
+    except RunBudgetExceeded as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 3
     finally:
         if lab is not None:
             lab.stop()

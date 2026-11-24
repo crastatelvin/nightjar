@@ -11,6 +11,7 @@ import asyncio
 import math
 import time
 import uuid
+from collections.abc import Callable
 from typing import Any
 
 import httpx
@@ -27,6 +28,23 @@ from nightjar.evals.scorer import TERMINAL_STATUSES, score_case
 
 DEFAULT_EVAL_DATABASE_URL = "postgresql+asyncpg://nightjar@127.0.0.1:55432/nightjar_eval"
 SEED_FIELDS = ("title", "description", "incident_class", "severity", "source", "metadata")
+
+
+class RunBudgetExceeded(RuntimeError):
+    """A run-level cost cap stopped the harness between cases.
+
+    The per-incident ceiling bounds one case; this bounds the bill for a whole
+    nightly run. It is checked before a case starts, so the overshoot is at most
+    the cost of the case that was already running.
+    """
+
+    def __init__(self, *, spent_usd: float, cap_usd: float, next_case: str) -> None:
+        super().__init__(
+            f"eval run spent ${spent_usd:.2f} against a ${cap_usd:.2f} cap before {next_case}"
+        )
+        self.spent_usd = spent_usd
+        self.cap_usd = cap_usd
+        self.next_case = next_case
 
 
 async def _ensure_schema(database_url: str) -> None:
@@ -200,28 +218,62 @@ def run_case(
     return score_case(case, observation, latency_seconds=time.monotonic() - started)
 
 
+def _report_score(score: CaseScore) -> None:
+    verdict = "PASS" if score.outcome_correct and not score.false_resolution else "FAIL"
+    flag = "  FALSE-RESOLUTION" if score.false_resolution else ""
+    print(
+        f"  {verdict}  {score.case_id:<42} {score.status:<10}{flag}",
+        flush=True,
+    )
+
+
+def run_with_budget(
+    cases: list[EvalCase],
+    run_one: Callable[[EvalCase], CaseScore],
+    *,
+    max_cost_usd: float | None = None,
+    spent_usd: float = 0.0,
+    on_score: Callable[[CaseScore], None] | None = None,
+) -> list[CaseScore]:
+    """Run cases until the list ends or the run-level cap is reached.
+
+    The check is between cases: the cost of a case is only known after the
+    provider has answered, and a per-incident ceiling already bounds that
+    overshoot. Starting a case after the cap is spent is what this prevents.
+    """
+    scores: list[CaseScore] = []
+    spent = spent_usd
+    for case in cases:
+        if max_cost_usd is not None and spent >= max_cost_usd:
+            raise RunBudgetExceeded(spent_usd=spent, cap_usd=max_cost_usd, next_case=case.id)
+        score = run_one(case)
+        scores.append(score)
+        spent += float(score.cost_usd)
+        if on_score is not None:
+            on_score(score)
+    return scores
+
+
 def run_cases(
     cases: list[EvalCase],
     *,
     settings: Settings,
     lab_url: str,
     timeout: float = 45.0,
+    max_cost_usd: float | None = None,
+    spent_usd: float = 0.0,
 ) -> list[CaseScore]:
-    scores: list[CaseScore] = []
     with (
         httpx.Client(base_url=lab_url, timeout=10.0) as lab,
         TestClient(create_app(settings)) as client,
     ):
-        for case in cases:
-            score = run_case(client, lab, case, timeout=timeout)
-            scores.append(score)
-            verdict = "PASS" if score.outcome_correct and not score.false_resolution else "FAIL"
-            flag = "  FALSE-RESOLUTION" if score.false_resolution else ""
-            print(
-                f"  {verdict}  {score.case_id:<42} {score.status:<10}{flag}",
-                flush=True,
-            )
-    return scores
+        return run_with_budget(
+            cases,
+            lambda case: run_case(client, lab, case, timeout=timeout),
+            max_cost_usd=max_cost_usd,
+            spent_usd=spent_usd,
+            on_score=_report_score,
+        )
 
 
 def run_by_stability_group(
@@ -232,12 +284,14 @@ def run_by_stability_group(
     provider: str,
     model: str,
     timeout: float = 45.0,
+    max_cost_usd: float | None = None,
 ) -> list[CaseScore]:
     groups: dict[int, list[EvalCase]] = {}
     for case in cases:
         groups.setdefault(case.stability_seconds, []).append(case)
 
     scored: dict[int, list[CaseScore]] = {}
+    spent = 0.0
     for stability_seconds, group_cases in sorted(groups.items()):
         settings = evaluation_settings(
             database_url=database_url,
@@ -251,7 +305,10 @@ def run_by_stability_group(
             settings=settings,
             lab_url=lab_url,
             timeout=timeout,
+            max_cost_usd=max_cost_usd,
+            spent_usd=spent,
         )
+        spent += sum(score.cost_usd for score in scored[stability_seconds])
 
     results: list[CaseScore] = []
     for case in cases:

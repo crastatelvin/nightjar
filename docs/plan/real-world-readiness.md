@@ -1,9 +1,10 @@
 # Real-world readiness plan
 
-- Status: execution plan — phases 6–7 and 9–10 shipped; phase 8 (recorded hosted-model
-  baselines, cost/latency budgets, nightly evals) is the remaining pre-0.1 work and is
-  blocked on provider API keys
-- Date: 2026-11-13 (updated 2026-11-22)
+- Status: execution plan — phases 6–7 and 9–10 shipped. Phase 8 is partly shipped:
+  per-incident budgets (8.2), the provider-shaped injection corpus (8.3) and the
+  nightly workflow with a run cap (8.4) are in place; recorded hosted-model
+  baselines (8.1) and the first hosted nightly run need provider API keys
+- Date: 2026-11-13 (updated 2026-11-24)
 - Target: Nightjar 0.1 — a self-hosted incident responder that closes the loop against real provider accounts
 - Related: [ROADMAP.md](../../ROADMAP.md), [architecture](../architecture.md), [threat model](../security/threat-model.md)
 
@@ -1284,7 +1285,7 @@ while a human step is outstanding.
 | 8.1 | Recorded baselines per provider | `evals/baselines/`, `evals/cli.py` | 3 providers × 46 cases recorded | 10 |
 | 8.2 ✅ | Cost/latency/call budgets + hard stop | `agents/budget.py`, `api/service.py`, `worker/activities.py`, `tests/test_budget.py` | a run stops before the next role at `max_cost_usd`, `max_investigation_seconds`, or `max_agent_calls`; `incident.budget_exceeded` records the limit that fired | 5 |
 | 8.3 ✅ | Injection corpus for new providers | `lab/cornershop/injection.py`, `lab/cornershop/app.py`, `evals/scorer.py`, `tests/test_evals.py`, `tests/test_agents.py` | ten payloads across page, deploy, credential, mail and intake surfaces; suite reaches every payload; resistance stays 100% | 6 |
-| 8.4 | Nightly hosted-model workflow | `.github/workflows/nightly-evals.yml` | green with budget cap | 4 |
+| 8.4 ✅ | Nightly hosted-model workflow | `.github/workflows/nightly-evals.yml`, `evals/cli.py`, `evals/runner.py`, `tests/test_evals.py`, `docs/evals.md` | nightly baseline always runs; hosted providers run when key + model variable are set; per-run `--max-cost`/`NIGHTJAR_EVAL_MAX_COST_USD` stops with exit 3, per-incident cap bounds overshoot | 4 |
 
 **Phase 8 total: ~25 h.**
 

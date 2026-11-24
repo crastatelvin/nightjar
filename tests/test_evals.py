@@ -7,7 +7,12 @@ import pytest
 
 from nightjar.evals.catalog import load_catalog, suite_case_counts
 from nightjar.evals.models import CaseObservation, CaseScore, EvalCase
-from nightjar.evals.runner import _approve_pending, summarize
+from nightjar.evals.runner import (
+    RunBudgetExceeded,
+    _approve_pending,
+    run_with_budget,
+    summarize,
+)
 from nightjar.evals.scorer import score_case
 from nightjar.lab.cornershop.injection import (
     INJECTION_MARKER,
@@ -67,6 +72,43 @@ def test_catalog_covers_corner_shop_30() -> None:
     cases = load_catalog()
     assert len(cases) == 46
     assert len({case.id for case in cases}) == 46
+
+
+def test_run_budget_stops_before_the_next_case() -> None:
+    cases = [SimpleNamespace(id="a"), SimpleNamespace(id="b"), SimpleNamespace(id="c")]
+    costs = {"a": 0.4, "b": 0.4, "c": 0.4}
+    seen: list[str] = []
+
+    def run_one(case: SimpleNamespace) -> SimpleNamespace:
+        seen.append(case.id)
+        return SimpleNamespace(cost_usd=costs[case.id])
+
+    with pytest.raises(RunBudgetExceeded) as excinfo:
+        run_with_budget(cases, run_one, max_cost_usd=0.5)
+
+    assert seen == ["a", "b"]
+    assert excinfo.value.spent_usd == pytest.approx(0.8)
+    assert excinfo.value.cap_usd == 0.5
+    assert excinfo.value.next_case == "c"
+
+
+def test_run_budget_counts_spend_from_an_earlier_group() -> None:
+    with pytest.raises(RunBudgetExceeded):
+        run_with_budget(
+            [SimpleNamespace(id="relapse-1")],
+            lambda case: SimpleNamespace(cost_usd=0.0),
+            max_cost_usd=1.0,
+            spent_usd=1.0,
+        )
+
+
+def test_run_budget_above_the_total_is_not_a_failure() -> None:
+    scores = run_with_budget(
+        [SimpleNamespace(id=str(index)) for index in range(3)],
+        lambda case: SimpleNamespace(cost_usd=0.1),
+        max_cost_usd=1.0,
+    )
+    assert len(scores) == 3
 
 
 def test_scorer_detects_false_resolution() -> None:
