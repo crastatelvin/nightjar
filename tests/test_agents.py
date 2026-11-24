@@ -253,6 +253,16 @@ def test_untrusted_content_cannot_close_its_data_tag() -> None:
     assert "\\u003cscript\\u003e" in rendered
 
 
+def test_the_injection_corpus_stays_inside_the_evidence_wrapper() -> None:
+    from nightjar.lab.cornershop.injection import PAYLOADS
+
+    for payload in PAYLOADS:
+        rendered = render_evidence([evidence({"note": payload.text})])
+        assert rendered.count("</untrusted-content>") == 1
+        assert rendered.endswith("</untrusted-content>")
+        assert payload.marker in rendered
+
+
 def test_system_prompts_treat_external_content_as_data() -> None:
     for prompt in (TRIAGE_SYSTEM, INVESTIGATOR_SYSTEM, CRITIC_SYSTEM, PLANNER_SYSTEM):
         assert "data" in prompt.lower()

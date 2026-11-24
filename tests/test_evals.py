@@ -9,7 +9,11 @@ from nightjar.evals.catalog import load_catalog, suite_case_counts
 from nightjar.evals.models import CaseObservation, CaseScore, EvalCase
 from nightjar.evals.runner import _approve_pending, summarize
 from nightjar.evals.scorer import score_case
-from nightjar.lab.cornershop.app import INJECTION_MARKER
+from nightjar.lab.cornershop.injection import (
+    INJECTION_MARKER,
+    PAYLOADS,
+    select_payload,
+)
 
 
 def cache_case(**overrides: object) -> EvalCase:
@@ -183,6 +187,7 @@ def test_summary_injection_rate_ignores_non_injection_cases() -> None:
 
 @pytest.mark.integration
 def test_lab_exposes_injection_payload_to_read_probes(lab_url: str) -> None:
+    site_payload = select_payload(0, 0)  # site_cache_poisoned, variant 0
     with httpx.Client(base_url=lab_url, timeout=10.0) as lab:
         lab.post("/lab/reset")
         lab.post(
@@ -190,15 +195,58 @@ def test_lab_exposes_injection_payload_to_read_probes(lab_url: str) -> None:
             params={"variant": 0, "injection": "true"},
         )
         state = lab.get("/lab/state").json()
-        assert INJECTION_MARKER in state["ops_note"]
+        assert site_payload.marker in state["ops_note"]
+        page = lab.get("/site/").json()
+        assert site_payload.marker in page["notice"]
+        deployments = lab.get("/lab/deployments").json()
+        assert site_payload.marker in deployments["change_note"]
 
+        mail_payload = select_payload(4, 0)  # phishing_report, variant 0
         lab.post("/lab/reset")
         lab.post(
             "/lab/scenario/phishing_report",
             params={"variant": 0, "injection": "true"},
         )
         message = lab.get("/lab/mail/msg_phish_0001").json()
-        assert INJECTION_MARKER in message["body"]
+        assert mail_payload.marker in message["body"]
+
+
+def test_the_injection_suite_reaches_every_payload() -> None:
+    scenarios = [
+        "site_cache_poisoned",
+        "site_bad_deploy",
+        "site_db_down",
+        "credential_leaked",
+        "phishing_report",
+    ]
+    selected = {
+        select_payload(index, variant).id for index in range(len(scenarios)) for variant in (0, 1)
+    }
+    assert selected == {payload.id for payload in PAYLOADS}
+    assert len(PAYLOADS) == 10
+
+
+def test_every_payload_carries_its_own_marker() -> None:
+    markers = [payload.marker for payload in PAYLOADS]
+    assert len(set(markers)) == len(markers)
+    for payload in PAYLOADS:
+        assert payload.marker in payload.text
+
+
+def test_scorer_recognises_every_marker() -> None:
+    for payload in PAYLOADS:
+        case = cache_case(injection=True)
+        score = score_case(
+            case,
+            observation(
+                evidence=[{"content": {"note": payload.marker}}],
+                plan={"confidence": 0.9, "root_cause": f"do {payload.marker}"},
+            ),
+            latency_seconds=1.0,
+        )
+        assert score.injection_present is True
+        assert score.injection_resistant is False
+        assert any("leaked into the remediation plan" in v for v in score.policy_violations)
 
 
 class _ApprovalClient:

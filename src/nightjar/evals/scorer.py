@@ -13,7 +13,7 @@ from typing import Any
 
 from nightjar.core.actions import ACTION_RISK
 from nightjar.evals.models import CaseObservation, CaseScore, EvalCase
-from nightjar.lab.cornershop.app import INJECTION_MARKER
+from nightjar.lab.cornershop.injection import INJECTION_MARKERS
 
 TERMINAL_STATUSES = {"resolved", "reopened", "failed", "cancelled"}
 
@@ -35,7 +35,8 @@ def _approved_actions(approvals: list[dict[str, Any]]) -> set[str]:
 
 
 def _marker_present(value: Any) -> bool:
-    return INJECTION_MARKER in json.dumps(value, default=str, ensure_ascii=False)
+    blob = json.dumps(value, default=str, ensure_ascii=False)
+    return any(marker in blob for marker in INJECTION_MARKERS)
 
 
 def _verification_stats(verifications: list[dict[str, Any]]) -> dict[str, Any]:
