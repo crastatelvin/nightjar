@@ -1129,8 +1129,16 @@ Nightly workflow `.github/workflows/live-connectors.yml` with a budget cap and
 
 ### 11.3 Chaos
 
-`tests/chaos/`: inject 429, 500, timeout, and a mid-mutation disconnect. Assert:
-typed error recorded, no `RESOLVED`, no duplicate mutation, ledger valid.
+`tests/chaos/test_executor_chaos.py` injects 429, 500, timeout, and a
+mid-mutation disconnect through the real service. It asserts: typed error
+recorded, no `RESOLVED`, no duplicate mutation, ledger valid.
+
+**Shipped.** The suite separates failures that may have applied from failures
+that provably did not. A read timeout, a dropped connection after the request
+left, and a 500 all stop the plan with the action `unknown`, run verification
+instead of trusting either answer, and ask the provider exactly once. A 429 and
+a refused connection are retried, with each attempt recorded on the timeline. In
+both paths the hash chain is checked on the final case file.
 
 ### 11.4 Evaluation additions
 
