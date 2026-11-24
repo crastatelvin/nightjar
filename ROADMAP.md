@@ -1,6 +1,6 @@
 # Nightjar roadmap
 
-Last updated: 2026-11-13
+Last updated: 2026-11-24
 
 Nightjar is a verification-first incident response agent for small organizations.
 The product thesis is simple: an incident is not resolved because a model says so.
@@ -21,11 +21,12 @@ that claim is tamper-evident.
 - [x] Apache-2.0 + DCO, security policy, threat model
 - [x] Docker Compose, CI, and release checks
 - [x] **Phase 5 — the living case file** (core complete; see below)
-- [ ] **Phase 6 — production execution surface** (in progress; see the
+- [x] **Phase 6 — production execution surface** (complete; see the
       [readiness plan](docs/plan/real-world-readiness.md))
-- [ ] Phase 7 — multi-process and identity
-- [ ] Phase 8 — evidence for skeptics
-- [ ] Phase 9 — 0.1 public launch
+- [x] Phase 7 — multi-process and identity
+- [ ] Phase 8 — evidence for skeptics (budgets, corpus, nightly workflow,
+      backups and runbooks shipped; recorded hosted-model baselines need keys)
+- [ ] Phase 9 — 0.1 public launch (artifacts and docs shipped; the tag is pending)
 
 ## v1 scope
 
@@ -91,7 +92,10 @@ Delivered:
 
 Remaining:
 
-- Screenshot regression baselines, once the layout settles for 0.1.
+- Pixel-diff baselines are deliberately not gated: the background is an animated
+  canvas and the type is dense sub-pixel, so a committed baseline would encode
+  the rasterizer rather than the product. Screenshots are uploaded per run for a
+  human to review, and axe fails the build on critical or serious violations.
 
 Performance and motion requirements:
 
@@ -115,7 +119,7 @@ Performance and motion requirements:
 - **Evidence first.** Every claim shows its hash, its source, and a verifier
   result. The UI never presents an unreachable or unverifiable state as green.
 
-### Phase 6 — Production execution surface (in progress)
+### Phase 6 — Production execution surface (complete)
 
 The full work order, with endpoints, scopes, verification predicates, file paths,
 tests, and estimates, is [docs/plan/real-world-readiness.md](docs/plan/real-world-readiness.md).
@@ -123,7 +127,8 @@ tests, and estimates, is [docs/plan/real-world-readiness.md](docs/plan/real-worl
 The gap was execution, not orchestration. Every v1 action type now has at least
 one real provider: containment and revocation on both mail platforms, rollback on
 three deploy platforms, restart on two, and a verified manual step where no API
-exists. What remains in this phase is hardening, not reach.
+exists. The hardening items below are shipped; the remaining provider work is
+live-account validation, not reach.
 
 1. **Safe defaults.** ✅ Production refuses the lab connector, private probes, a
    missing token, an empty target allowlist, and a short stability window.
@@ -178,25 +183,33 @@ exists. What remains in this phase is hardening, not reach.
   is the verified token identity, not a header. ✅
 - Separation of duties for approvals, opt-in so a lone operator is not locked out
   of their own incident. ✅
-- Group-to-role mapping, rate limits shared across replicas, request size caps,
-  and request IDs. (Per-process provider token buckets and `Retry-After`-aware
-  connector retries are shipped.)
-- SSE over `LISTEN/NOTIFY` with the poll as fallback.
+- Group-to-role mapping through OIDC approver groups, rate limits shared across
+  replicas, request size caps, and request IDs. ✅ (Provider token budgets stay
+  per process; the caller-facing API budget can share state in PostgreSQL.)
+- SSE over `LISTEN/NOTIFY` with the poll as fallback. ✅
 
 ### Phase 8 — Evidence for skeptics
 
-- Recorded hosted-model baselines per provider; cost and latency budgets.
-- Nightly live-connector suite against sandbox accounts.
-- Backup/restore verification, migration upgrade tests, Compose smoke test.
-- Operator runbooks for the three v1 incident classes.
+- ✅ Per-incident cost, wall-clock and call ceilings with a hard stop. A stop
+  records `incident.budget_exceeded` and fails before any action is planned.
+- ✅ Ten-payload prompt-injection corpus across page, deployment, credential,
+  mail and intake surfaces; the injection suite reaches every payload.
+- ✅ Nightly workflow: the deterministic baseline always runs; hosted providers
+  run when keys are configured, behind a per-run cost cap.
+- ✅ Backup/restore verification, migration upgrade tests, Compose smoke test.
+- ✅ Operator runbooks for the three v1 incident classes.
+- Recorded hosted-model baselines per provider (needs provider API keys).
+- Nightly live-connector suite against sandbox accounts (needs sandbox tenants;
+  this is separate from the hosted-model evaluation above).
 
 ### Phase 9 — Public launch
 
-- Publish 0.1 with a pinned changelog and upgrade note.
-- Signed images, SBOM, PyPI workflow, CodeQL, Dependabot, code of conduct.
-- Docs site pass, demo recording, accessibility and screenshot baselines.
-- Anonymous opt-out telemetry toggle (off by default) once the schema exists;
-  keep the ledger local-first.
+- Publish 0.1 with a pinned changelog and upgrade note. (Artifacts are wired and
+  gated on the first `v*.*.*` tag; the repository stays private until then.)
+- ✅ Signed images, SBOM, PyPI workflow, CodeQL, Dependabot, code of conduct.
+- ✅ Docs pass, demo recording, accessibility gate and screenshot artifacts.
+- ✅ Opt-in OpenTelemetry export for operators who run a collector. There is no
+  phone-home telemetry and none is planned for v1.
 
 ## Non-goals for v1
 

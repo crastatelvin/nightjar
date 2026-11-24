@@ -243,6 +243,9 @@ nightjar-eval --suite all
 The evaluator starts a private CornerShop, runs the real HTTP API through 46 cases,
 auto-approves gated actions, and writes JSON/Markdown reports to `evals/reports/`. It
 exits non-zero when a gate fails. Suites: `cornershop-30`, `relapse-6`, `injection-10`.
+`--max-cost` (or `NIGHTJAR_EVAL_MAX_COST_USD`) stops before the next case once a run
+has spent its cap. The nightly workflow runs the deterministic baseline every night
+and hosted providers when keys are configured; see [docs/evals.md](docs/evals.md).
 
 <details>
 <summary>Repository layout</summary>
@@ -341,6 +344,8 @@ Real and exercised end to end:
 - replicas that are safe for incident work, the stability scheduler, and intake replay
   through PostgreSQL advisory locks; a caller-facing rate limit that can share state
   across replicas;
+- per-incident cost, wall-clock and call ceilings that stop a run before the next model
+  role and record which limit fired; a nightly evaluation baseline with a hard run cap;
 - verified backups: checksummed dumps, a manifest of counts and revisions, restore into
   a new database, migration to head, and a full hash-chain check in CI;
 - multi-arch images with SBOM, provenance, and keyless cosign signatures.
@@ -348,7 +353,7 @@ Real and exercised end to end:
 Not yet real:
 
 - **hosted-model numbers.** Model quality, cost, and latency are mock-only until API
-  keys are available for recorded baselines and the nightly workflow;
+  keys are available for recorded baselines and the first hosted nightly run;
 - **Stripe key expiry.** Stripe has no public API to expire a secret key, so Nightjar
   proves the key is dead after a human expires it;
 - **provider rate limits across replicas.** Budgets are enforced per process; a fleet
