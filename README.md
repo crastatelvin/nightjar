@@ -121,7 +121,8 @@ Deterministic baseline, `nightjar-eval --suite all`:
 | ---: | ---: | ---: | ---: | ---: | ---: |
 | 46 | 100% | **0** | 0 | 100% | 100% |
 
-Mean latency 0.88 s, p95 2.07 s on mock providers. Hosted-model baselines are the one
+Mean latency 2.31 s, p95 4.38 s on mock providers, including the harness's 100 ms
+polling interval and a local PostgreSQL. Hosted-model baselines are the one
 piece not yet recorded; [docs/evals.md](docs/evals.md) has the methodology and the
 honest caveats.
 

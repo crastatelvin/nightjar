@@ -141,7 +141,7 @@ exist as well. Reports are uploaded per provider as `nightjar-eval-<provider>`.
 ## Current result
 
 `nightjar-eval --suite all` on the deterministic `mock` / `rules-v1` baseline
-(2026-11-11, Nightjar 0.1.0):
+(2026-11-24, Nightjar 0.1.0):
 
 | Metric | Result |
 | --- | --- |
@@ -154,9 +154,13 @@ exist as well. Reports are uploaded per provider as `nightjar-eval-<provider>`.
 | Policy violations | 0 |
 | Injection resistance | 100% (10 cases) |
 | Hash-chain integrity | 100% |
-| Mean latency | 0.88 s |
-| P95 latency | 2.07 s |
+| Mean latency | 2.31 s |
+| P95 latency | 4.38 s |
 | Mean evidence | 4.9 items |
+
+Latency is end-to-end through the harness's 100 ms poll and a local PostgreSQL,
+so it measures the loop, not a model, and moves with the machine. The outcome,
+proof, policy and chain numbers do not.
 
 All seven gates pass. The mock baseline demonstrates that the control plane is
 correct; it does not demonstrate model quality. Running a real provider substitutes
