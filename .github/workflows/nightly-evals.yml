@@ -23,8 +23,8 @@ permissions:
 
 env:
   PYTHON_VERSION: "3.14"
-  MAX_COST_USD: ${{ inputs.max_cost_usd || '5.00' }}
-  PROVIDERS: ${{ inputs.providers || 'openai,anthropic,google' }}
+  MAX_COST_USD: ${{ github.event.inputs.max_cost_usd || '5.00' }}
+  PROVIDERS: ${{ github.event.inputs.providers || 'openai,anthropic,google' }}
 
 jobs:
   baseline:
