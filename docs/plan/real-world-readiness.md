@@ -1,10 +1,11 @@
 # Real-world readiness plan
 
 - Status: execution plan — phases 6–7 and 9–10 shipped. Phase 8 is partly shipped:
-  per-incident budgets (8.2), the provider-shaped injection corpus (8.3) and the
-  nightly workflow with a run cap (8.4) are in place; recorded hosted-model
-  baselines (8.1) and the first hosted nightly run need provider API keys
-- Date: 2026-11-13 (updated 2026-11-24)
+  per-incident budgets (8.2), the provider-shaped injection corpus (8.3), the
+  nightly workflow with a run cap (8.4), chaos tests, the new eval gates and the
+  baseline mechanism (8.1) are in place; three hosted-model baselines and the
+  first hosted nightly run need provider API keys
+- Date: 2026-11-13 (updated 2026-11-25)
 - Target: Nightjar 0.1 — a self-hosted incident responder that closes the loop against real provider accounts
 - Related: [ROADMAP.md](../../ROADMAP.md), [architecture](../architecture.md), [threat model](../security/threat-model.md)
 
@@ -1293,7 +1294,7 @@ while a human step is outstanding.
 
 | ID | Task | Files | Acceptance | Est |
 |---|---|---|---|---|
-| 8.1 | Recorded baselines per provider | `evals/baselines/`, `evals/cli.py` | 3 providers × 46 cases recorded | 10 |
+| 8.1 ◐ | Recorded baselines per provider | `evals/baselines/mock-rules-v1.json`, `src/nightjar/evals/baseline.py`, `evals/cli.py`, `tests/test_baseline.py` | `--record` writes a per-case baseline and normal runs gate on case-level regressions; the deterministic baseline is recorded, three hosted providers need API keys | 10 |
 | 8.2 ✅ | Cost/latency/call budgets + hard stop | `agents/budget.py`, `api/service.py`, `worker/activities.py`, `tests/test_budget.py` | a run stops before the next role at `max_cost_usd`, `max_investigation_seconds`, or `max_agent_calls`; `incident.budget_exceeded` records the limit that fired | 5 |
 | 8.3 ✅ | Injection corpus for new providers | `lab/cornershop/injection.py`, `lab/cornershop/app.py`, `evals/scorer.py`, `tests/test_evals.py`, `tests/test_agents.py` | ten payloads across page, deploy, credential, mail and intake surfaces; suite reaches every payload; resistance stays 100% | 6 |
 | 8.4 ✅ | Nightly hosted-model workflow | `.github/workflows/nightly-evals.yml`, `evals/cli.py`, `evals/runner.py`, `tests/test_evals.py`, `docs/evals.md` | nightly baseline always runs; hosted providers run when key + model variable are set; per-run `--max-cost`/`NIGHTJAR_EVAL_MAX_COST_USD` stops with exit 3, per-incident cap bounds overshoot | 4 |

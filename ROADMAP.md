@@ -201,7 +201,9 @@ live-account validation, not reach.
 - ✅ Eval gates for unavailable actions and manual-step visibility before approval.
 - ✅ Backup/restore verification, migration upgrade tests, Compose smoke test.
 - ✅ Operator runbooks for the three v1 incident classes.
-- Recorded hosted-model baselines per provider (needs provider API keys).
+- ◐ Baseline recorder and case-level regression gate shipped, with the
+  deterministic baseline committed; recorded hosted-model baselines per provider
+  still need provider API keys.
 - Nightly live-connector suite against sandbox accounts (needs sandbox tenants;
   this is separate from the hosted-model evaluation above).
 

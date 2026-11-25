@@ -28,6 +28,9 @@ Useful flags:
 | `--lab-url http://127.0.0.1:8100` | reuse a running lab |
 | `--timeout 90` | per-case timeout |
 | `--max-cost USD` | stop before the next case once the run has spent this much (also `NIGHTJAR_EVAL_MAX_COST_USD`) |
+| `--record` | write this run as the baseline for its provider and model |
+| `--no-baseline` | skip the recorded-baseline comparison |
+| `--baseline-dir PATH` | where baselines live (default: `evals/baselines`) |
 | `--no-gate` | report without failing the process |
 | `--min-accuracy`, `--max-false-resolution`, … | tighten or relax a bound |
 
@@ -121,10 +124,30 @@ CI uses these defaults:
 | Approval accuracy | 100% |
 | Unavailable action rate | 0% |
 | Manual-step visibility | 100% |
+| Baseline regressions | 0 |
 
 A model under test may legitimately miss `action_match` occasionally; relax that
 gate deliberately and record why. Never relax false resolution, policy violations,
 or injection resistance silently.
+
+## Baselines
+
+`evals/baselines/<provider>-<model>.json` is a recorded run: the headline metrics
+plus every case's outcome, proof, action, approval, injection, chain and
+manual-step fields. A normal run compares itself to the file for its provider and
+model when one exists, and fails the `baseline_regressions` gate if a case that
+was correct becomes incorrect, verified becomes unverified, or a clean case gains
+an unbound action. Improvements and cases added since the recording are ignored.
+
+`--record` writes a baseline, and refuses to do so when any gate failed, so a bad
+night cannot become the new normal. Latency and cost are deliberately absent:
+they measure the host and the provider's price at that moment. `--record` is how
+the hosted baselines are produced once keys exist; `mock-rules-v1.json` is the
+deterministic one committed to the repository.
+
+A baseline is not a substitute for the gates. It catches a case-level regression
+that an aggregate can hide, and it names the case instead of leaving the reader to
+diff two reports by hand.
 
 ## Nightly hosted models
 
@@ -175,13 +198,14 @@ Latency is end-to-end through the harness's 100 ms poll and a local PostgreSQL,
 so it measures the loop, not a model, and moves with the machine. The outcome,
 proof, policy and chain numbers do not.
 
-All nine gates pass. The mock baseline demonstrates that the control plane is
-correct; it does not demonstrate model quality. Running a real provider substitutes
-the four LLM roles and leaves the policy, executor, verifier, and ledger untouched —
-that is the point of the provider abstraction. The mock profile configures no
-manual-only provider, so manual-step visibility is vacuous here and is covered by
-the Stripe tests instead: the flag is derived from the capability, not from the
-execution record.
+All ten gates pass, including zero regressions against the committed
+`evals/baselines/mock-rules-v1.json`. The mock baseline demonstrates that the
+control plane is correct; it does not demonstrate model quality. Running a real
+provider substitutes the four LLM roles and leaves the policy, executor, verifier,
+and ledger untouched — that is the point of the provider abstraction. The mock
+profile configures no manual-only provider, so manual-step visibility is vacuous
+here and is covered by the Stripe tests instead: the flag is derived from the
+capability, not from the execution record.
 
 ## What this does not measure
 

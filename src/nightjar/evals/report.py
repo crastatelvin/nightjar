@@ -29,6 +29,7 @@ class GateThresholds:
     min_approval_accuracy: float = 1.0
     max_unavailable_action_rate: float = 0.0
     min_manual_step_visibility: float = 1.0
+    max_baseline_regressions: int = 0
 
     def as_dict(self) -> dict[str, float | int]:
         return {
@@ -41,10 +42,16 @@ class GateThresholds:
             "min_approval_accuracy": self.min_approval_accuracy,
             "max_unavailable_action_rate": self.max_unavailable_action_rate,
             "min_manual_step_visibility": self.min_manual_step_visibility,
+            "max_baseline_regressions": self.max_baseline_regressions,
         }
 
 
-def evaluate_gates(summary: EvalSummary, thresholds: GateThresholds) -> list[dict[str, Any]]:
+def evaluate_gates(
+    summary: EvalSummary,
+    thresholds: GateThresholds,
+    *,
+    baseline_regressions: int = 0,
+) -> list[dict[str, Any]]:
     checks = [
         {
             "name": "accuracy",
@@ -99,6 +106,12 @@ def evaluate_gates(summary: EvalSummary, thresholds: GateThresholds) -> list[dic
             "observed": summary.manual_step_visibility,
             "minimum": thresholds.min_manual_step_visibility,
             "passed": summary.manual_step_visibility >= thresholds.min_manual_step_visibility,
+        },
+        {
+            "name": "baseline_regressions",
+            "observed": baseline_regressions,
+            "maximum": thresholds.max_baseline_regressions,
+            "passed": baseline_regressions <= thresholds.max_baseline_regressions,
         },
     ]
     return checks

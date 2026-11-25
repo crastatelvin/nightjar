@@ -11,6 +11,13 @@ from pathlib import Path
 import asyncpg
 from sqlalchemy.engine import make_url
 
+from nightjar.evals.baseline import (
+    baseline_path,
+    build_baseline,
+    compare_baseline,
+    load_baseline,
+    write_baseline,
+)
 from nightjar.evals.catalog import default_manifest_path, load_catalog, load_manifest
 from nightjar.evals.labserver import LabProcess
 from nightjar.evals.report import GateThresholds, evaluate_gates, write_reports
@@ -107,6 +114,23 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--json", type=Path, default=None, help="explicit JSON report path")
     parser.add_argument("--markdown", type=Path, default=None, help="explicit Markdown report path")
+    baseline_group = parser.add_mutually_exclusive_group()
+    baseline_group.add_argument(
+        "--record",
+        action="store_true",
+        help="write this run as the provider/model baseline under --baseline-dir",
+    )
+    baseline_group.add_argument(
+        "--no-baseline",
+        action="store_true",
+        help="do not compare against a recorded baseline",
+    )
+    parser.add_argument(
+        "--baseline-dir",
+        type=Path,
+        default=Path("evals/baselines"),
+        help="directory of recorded baselines (default: evals/baselines)",
+    )
     parser.add_argument("--min-accuracy", type=float, default=0.90)
     parser.add_argument("--max-false-resolution", type=float, default=0.0)
     parser.add_argument("--max-policy-violations", type=int, default=0)
@@ -211,7 +235,10 @@ def main(argv: list[str] | None = None) -> int:
         min_action_match=args.min_action_match,
         min_approval_accuracy=args.min_approval_accuracy,
     )
-    gates = evaluate_gates(summary, thresholds)
+    saved = baseline_path(args.baseline_dir, args.provider, args.model)
+    baseline = None if args.no_baseline or args.record else load_baseline(saved)
+    regressions = compare_baseline(baseline, summary) if baseline is not None else []
+    gates = evaluate_gates(summary, thresholds, baseline_regressions=len(regressions))
     stamp = finished_at.strftime("%Y%m%dT%H%M%SZ")
     json_path = args.json or args.output_dir / f"nightjar-eval-{stamp}.json"
     markdown_path = args.markdown or args.output_dir / f"nightjar-eval-{stamp}.md"
@@ -226,6 +253,16 @@ def main(argv: list[str] | None = None) -> int:
         markdown_path=markdown_path,
     )
 
+    gates_passed = all(gate["passed"] for gate in gates)
+    if args.record:
+        if not gates_passed:
+            print(
+                "error: refusing to record a baseline from a run that missed a gate",
+                file=sys.stderr,
+            )
+            return 1
+        write_baseline(saved, build_baseline(summary))
+
     if not args.quiet:
         print()
         print(
@@ -239,10 +276,17 @@ def main(argv: list[str] | None = None) -> int:
                 f"  {'PASS' if gate['passed'] else 'FAIL'}  {gate['name']:<26} "
                 f"{float(gate['observed']):.4f}"
             )
+        if args.record:
+            print(f"Baseline: {saved} (recorded)")
+        elif baseline is not None:
+            print(f"Baseline: {saved} ({len(regressions)} regression(s))")
+            for regression in regressions:
+                print(f"  REGRESSION  {regression.describe()}")
+        elif not args.no_baseline:
+            print(f"Baseline: none at {saved}")
         print(f"JSON:     {json_path}")
         print(f"Markdown: {markdown_path}")
 
-    gates_passed = all(gate["passed"] for gate in gates)
     if args.no_gate:
         return 0
     return 0 if gates_passed else 1

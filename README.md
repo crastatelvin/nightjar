@@ -245,8 +245,10 @@ The evaluator starts a private CornerShop, runs the real HTTP API through 46 cas
 auto-approves gated actions, and writes JSON/Markdown reports to `evals/reports/`. It
 exits non-zero when a gate fails. Suites: `cornershop-30`, `relapse-6`, `injection-10`.
 `--max-cost` (or `NIGHTJAR_EVAL_MAX_COST_USD`) stops before the next case once a run
-has spent its cap. The nightly workflow runs the deterministic baseline every night
-and hosted providers when keys are configured; see [docs/evals.md](docs/evals.md).
+has spent its cap. A normal run compares itself with the recorded baseline for its
+provider and model and fails on a case-level regression; `--record` writes one. The
+nightly workflow runs the deterministic baseline every night and hosted providers
+when keys are configured; see [docs/evals.md](docs/evals.md).
 
 <details>
 <summary>Repository layout</summary>
