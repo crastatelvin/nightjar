@@ -48,11 +48,28 @@ def submit_as(client: TestClient, payload: dict[str, Any], *, actor: str) -> dic
 def approve(
     client: TestClient, incident_id: str, approval_id: str, *, actor: str
 ) -> httpx.Response:
-    return client.post(
+    """Approve, retrying the lock race the API reports as 409.
+
+    The pipeline can still hold the incident lock for a moment after the status
+    becomes ``awaiting_approval``. The API answers ``409`` with ``Retry-After``
+    rather than silently dropping the decision; a test that posts once is testing
+    the scheduler's timing, not the separation-of-duties rule.
+    """
+    response = client.post(
         f"/v1/incidents/{incident_id}/approvals/{approval_id}",
         json={"approved": True, "comment": "looks right"},
         headers={"authorization": f"Bearer {TOKEN}", "x-nightjar-actor": actor},
     )
+    for _ in range(20):
+        if response.status_code != 409:
+            break
+        time.sleep(0.1)
+        response = client.post(
+            f"/v1/incidents/{incident_id}/approvals/{approval_id}",
+            json={"approved": True, "comment": "looks right"},
+            headers={"authorization": f"Bearer {TOKEN}", "x-nightjar-actor": actor},
+        )
+    return response
 
 
 def authenticated(app: Any) -> TestClient:

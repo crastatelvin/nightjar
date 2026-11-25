@@ -38,7 +38,9 @@ Useful flags:
 Five v1 failure modes, six variants each (30 cases). Variants change the concrete
 symptoms and the seeded metadata — hostnames, service names, credential ids, mail
 ids, deployment versions, error text — so a solution cannot be keyed to a literal
-first seen in a fixture.
+first seen in a fixture. Credential cases rotate between Stripe and GitHub token
+shapes (`sk_live_…`, `ghp_` + 36 characters, `github_pat_` + 82), all
+structurally valid and all revoked in the lab.
 
 | Scenario | Fault | Expected remediation |
 | --- | --- | --- |

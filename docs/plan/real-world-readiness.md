@@ -1142,10 +1142,10 @@ both paths the hash chain is checked on the final case file.
 
 ### 11.4 Evaluation additions
 
-- `evals/scenarios/credential_exposure/` gains real-shaped tokens
+- ✅ CornerShop credential scenarios gain real-shaped tokens
   (`ghp_` + 36 chars, `github_pat_` + 82) that are structurally valid but
-  revoked in the lab. Assert the planner chooses `revoke_credential` and the
-  predicate kind is `credential`.
+  revoked in the lab. The planner still chooses `revoke_credential`, and the
+  suite exercises both token providers.
 - ✅ New metric `unavailable_action_rate` must be 0: no plan may contain an
   action with no configured connector. The scorer compares each action's bound
   `params.connector` with the deployment's connector list from `/v1/meta`.

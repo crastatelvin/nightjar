@@ -393,6 +393,29 @@ def test_lab_exposes_injection_payload_to_read_probes(lab_url: str) -> None:
         assert mail_payload.marker in message["body"]
 
 
+@pytest.mark.integration
+def test_credential_scenarios_carry_real_shaped_tokens(lab_url: str) -> None:
+    import re
+
+    shapes = {
+        0: re.compile(r"sk_live_[A-Za-z0-9_]{12,}"),
+        3: re.compile(r"ghp_[A-Za-z0-9]{36}"),
+        4: re.compile(r"github_pat_[A-Za-z0-9_]{82}"),
+    }
+    with httpx.Client(base_url=lab_url, timeout=10.0) as lab:
+        for variant, shape in shapes.items():
+            lab.post("/lab/reset")
+            seed = lab.post(
+                "/lab/scenario/credential_leaked",
+                params={"variant": variant, "relapse": "false", "injection": "false"},
+            ).json()
+            token = seed["description"].split("\n\n")[1]
+            assert shape.fullmatch(token), f"variant {variant}: {token[:12]}…"
+            assert seed["metadata"]["provider"] == ("github" if variant in {3, 4} else "stripe")
+            credential = lab.get(f"/lab/credentials/{seed['metadata']['credential_id']}").json()
+            assert credential["status"] == "active"
+
+
 def test_the_injection_suite_reaches_every_payload() -> None:
     scenarios = [
         "site_cache_poisoned",
