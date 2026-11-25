@@ -248,8 +248,10 @@ Query: `status`, `limit` (default 50), `offset`.
 
 Returns the full case file: incident, evidence, timeline, plan, actions, action
 states, `manual_steps`, approvals, verifications, executions, agent runs, notes,
-findings, and chain status. A manual step carries its provider, fingerprint,
-instructions, and the probe target, but never the credential value.
+findings, and chain status. Each action carries `manual: true` when its bound
+provider performs it by hand, so the approver sees that before signing off; a
+manual step that has reached execution also carries its provider, fingerprint,
+instructions, and probe target, but never the credential value.
 
 ### `GET /v1/incidents/{id}/timeline?after_seq=N`
 

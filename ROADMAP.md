@@ -196,6 +196,9 @@ live-account validation, not reach.
   mail and intake surfaces; the injection suite reaches every payload.
 - ✅ Nightly workflow: the deterministic baseline always runs; hosted providers
   run when keys are configured, behind a per-run cost cap.
+- ✅ Chaos tests for timeouts, dropped connections, 429s and 500s: an ambiguous
+  failure is never retried, and the ledger stays valid either way.
+- ✅ Eval gates for unavailable actions and manual-step visibility before approval.
 - ✅ Backup/restore verification, migration upgrade tests, Compose smoke test.
 - ✅ Operator runbooks for the three v1 incident classes.
 - Recorded hosted-model baselines per provider (needs provider API keys).

@@ -268,6 +268,23 @@ def test_a_manual_capability_returns_the_human_step(monkeypatch: pytest.MonkeyPa
 def test_an_automated_action_has_no_manual_step() -> None:
     registry = ConnectorRegistry([LabConnector("http://127.0.0.1:8100")])
     assert registry.manual_step(purge("lab")) is None
+    assert registry.is_manual(purge("lab")) is False
+
+
+def test_is_manual_answers_without_resolving_the_credential() -> None:
+    """A case-file read must not need the vault just to label the action."""
+    from nightjar.connectors.stripe import StripeConnector
+
+    registry = ConnectorRegistry([StripeConnector(None)])
+
+    assert registry.is_manual(_stripe_action()) is True
+    with pytest.raises(ConnectorError, match="credential_ref"):
+        registry.manual_step(_stripe_action())
+
+
+def test_an_unbound_action_is_not_claimed_as_manual() -> None:
+    registry = ConnectorRegistry([])
+    assert registry.is_manual(_stripe_action()) is False
 
 
 def test_a_manual_capability_without_instructions_fails_closed() -> None:

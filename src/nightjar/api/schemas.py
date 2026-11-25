@@ -110,12 +110,23 @@ class ChainStatus(BaseModel):
     broken_at: str | None = None
 
 
+class ActionView(ActionSpec):
+    """A stored action plus whether a human has to perform it.
+
+    The flag is derived from the bound connector's capability, not stored on the
+    plan. An approver needs to know before signing off that the "revocation" is a
+    dashboard step with a verification probe, not an API call Nightjar can make.
+    """
+
+    manual: bool = False
+
+
 class CaseFileResponse(BaseModel):
     incident: Incident
     evidence: list[EvidenceItem]
     timeline: list[TimelineEvent]
     plan: ActionPlan | None = None
-    actions: list[ActionSpec]
+    actions: list[ActionView]
     action_states: dict[str, ActionStatus]
     manual_steps: list[ManualStepView] = Field(default_factory=list)
     approvals: list[ApprovalRequest]
@@ -171,6 +182,7 @@ class CapabilitiesResponse(BaseModel):
 
 __all__ = [
     "ActionCapabilityView",
+    "ActionView",
     "ApprovalDecision",
     "CapabilitiesResponse",
     "CaseFileResponse",

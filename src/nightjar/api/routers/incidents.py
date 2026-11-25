@@ -69,6 +69,7 @@ def _manual_steps(case: CaseFile) -> list[schemas.ManualStepView]:
 def _case_response(
     case: CaseFile,
     *,
+    service: IncidentService,
     evidence_valid: bool,
     timeline_valid: bool,
     checked_evidence: int,
@@ -79,7 +80,10 @@ def _case_response(
         evidence=case.evidence,
         timeline=case.timeline,
         plan=case.plan,
-        actions=case.actions,
+        actions=[
+            schemas.ActionView(**action.model_dump(), manual=service.registry.is_manual(action))
+            for action in case.actions
+        ],
         action_states=case.action_states,
         manual_steps=_manual_steps(case),
         approvals=case.approvals,
@@ -105,6 +109,7 @@ async def _load_case(service: IncidentService, incident_id: str) -> schemas.Case
     evidence_chain, timeline_chain = await service.repo.verify_chains(incident_id)
     return _case_response(
         case,
+        service=service,
         evidence_valid=evidence_chain.valid,
         timeline_valid=timeline_chain.valid,
         checked_evidence=evidence_chain.checked,

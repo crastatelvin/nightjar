@@ -116,6 +116,24 @@ class ConnectorRegistry:
         step: ManualStep = describe(action)
         return step
 
+    def is_manual(self, action: ActionSpec) -> bool:
+        """Whether this action is a human step at its provider.
+
+        This answers the question without describing the step, so a case-file
+        read does not resolve a credential from the vault. An unbound or
+        ambiguous action is not claimed as manual; the plan is rejected before
+        approval, and saying "manual" would invent a fact.
+        """
+        try:
+            connector = self.connector_for(action)
+        except ConnectorError:
+            return False
+        capability = next(
+            (item for item in connector.capabilities() if item.action_type is action.action_type),
+            None,
+        )
+        return capability is not None and not capability.automated
+
     async def execute(self, action: ActionSpec) -> dict[str, Any]:
         validate_action(action)
         connector = self.connector_for(action)

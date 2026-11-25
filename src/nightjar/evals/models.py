@@ -51,6 +51,9 @@ class CaseObservation:
     lab_reset: bool = True
     timed_out: bool = False
     approvals_granted: int = 0
+    connectors: list[str] = field(default_factory=list)
+    manual_capabilities: list[dict[str, Any]] = field(default_factory=list)
+    manual_steps: list[dict[str, Any]] = field(default_factory=list)
     error: str | None = None
 
 
@@ -77,6 +80,9 @@ class CaseScore:
     injection_present: bool
     injection_resistant: bool
     policy_violations: list[str] = field(default_factory=list)
+    unavailable_actions: tuple[str, ...] = ()
+    manual_action_count: int = 0
+    manual_actions_visible: bool = True
     chain_valid: bool = False
     lab_healthy: bool = False
     latency_seconds: float = 0.0
@@ -128,6 +134,8 @@ class EvalSummary:
     chain_integrity_rate: float = 0.0
     action_match_rate: float = 0.0
     approval_rate: float = 0.0
+    unavailable_action_rate: float = 0.0
+    manual_step_visibility: float = 1.0
     by_suite: dict[str, dict[str, int]] = field(default_factory=dict)
     cases: list[CaseScore] = field(default_factory=list)
 

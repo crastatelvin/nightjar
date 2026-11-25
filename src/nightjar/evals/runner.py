@@ -115,7 +115,28 @@ def _approve_pending(client: TestClient, incident_id: str, seen: set[str]) -> st
     return refusal
 
 
-def _observation_from_case(case: dict[str, Any]) -> CaseObservation:
+def _environment(client: TestClient) -> dict[str, Any]:
+    """What this deployment can do, read from the API rather than assumed.
+
+    ``manual_capabilities`` is the independent source of truth for the
+    manual-step metric: the scorer does not have to trust the ``manual`` flag the
+    case file carries, it can check that every action whose bound provider is
+    manual was flagged.
+    """
+    meta = client.get("/v1/meta").json()
+    capabilities = client.get("/v1/meta/capabilities", params={"probe": "false"}).json()
+    return {
+        "connectors": list(meta.get("connectors") or []),
+        "manual_capabilities": [
+            action for action in capabilities.get("actions") or [] if not action.get("automated")
+        ],
+    }
+
+
+def _observation_from_case(
+    case: dict[str, Any], environment: dict[str, Any] | None = None
+) -> CaseObservation:
+    environment = environment or {}
     return CaseObservation(
         status=case["incident"]["status"],
         audit_healthy=True,
@@ -128,6 +149,9 @@ def _observation_from_case(case: dict[str, Any]) -> CaseObservation:
         evidence=case["evidence"],
         agent_runs=case["agent_runs"],
         chain=case["chain"],
+        manual_steps=case.get("manual_steps") or [],
+        connectors=list(environment.get("connectors") or []),
+        manual_capabilities=list(environment.get("manual_capabilities") or []),
         approvals_granted=sum(
             1 for approval in case["approvals"] if approval["status"] == "approved"
         ),
@@ -140,7 +164,9 @@ def run_case(
     case: EvalCase,
     *,
     timeout: float = 45.0,
+    environment: dict[str, Any] | None = None,
 ) -> CaseScore:
+    environment = environment or _environment(client)
     lab.post("/lab/reset", timeout=10.0)
     seed_response = lab.post(
         f"/lab/scenario/{case.scenario}",
@@ -207,7 +233,7 @@ def run_case(
 
     case_file = client.get(f"/v1/incidents/{incident_id}").json()
     audit = lab.get("/lab/audit", timeout=10.0).json()
-    observation = _observation_from_case(case_file)
+    observation = _observation_from_case(case_file, environment)
     observation.audit_healthy = bool(audit.get("healthy"))
     observation.audit_checks = dict(audit.get("checks") or {})
     observation.timed_out = timed_out
@@ -267,9 +293,10 @@ def run_cases(
         httpx.Client(base_url=lab_url, timeout=10.0) as lab,
         TestClient(create_app(settings)) as client,
     ):
+        environment = _environment(client)
         return run_with_budget(
             cases,
-            lambda case: run_case(client, lab, case, timeout=timeout),
+            lambda case: run_case(client, lab, case, timeout=timeout, environment=environment),
             max_cost_usd=max_cost_usd,
             spent_usd=spent_usd,
             on_score=_report_score,
@@ -354,6 +381,8 @@ def summarize(
     chain_valid = sum(1 for score in scores if score.chain_valid)
     action_matches = sum(1 for score in scores if score.action_match)
     approval_checks = sum(1 for score in scores if score.approvals_ok)
+    unavailable_cases = sum(1 for score in scores if score.unavailable_actions)
+    manual_visible = sum(1 for score in scores if score.manual_actions_visible)
     latencies = [score.latency_seconds for score in scores]
     costs = [score.cost_usd for score in scores]
     input_tokens = [score.input_tokens for score in scores]
@@ -404,6 +433,8 @@ def summarize(
         chain_integrity_rate=chain_valid / count if count else 0.0,
         action_match_rate=action_matches / count if count else 0.0,
         approval_rate=approval_checks / count if count else 0.0,
+        unavailable_action_rate=unavailable_cases / count if count else 0.0,
+        manual_step_visibility=manual_visible / count if count else 1.0,
         by_suite=by_suite,
         cases=scores,
     )

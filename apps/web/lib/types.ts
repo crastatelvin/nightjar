@@ -114,6 +114,7 @@ export interface ActionSpec {
   idempotency_key: string | null;
   predicate_ids: string[];
   evidence_ids: string[];
+  manual?: boolean;
 }
 
 export interface ActionPlan {

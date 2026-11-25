@@ -346,6 +346,33 @@ async def test_the_case_file_exposes_the_manual_step_and_its_proof_target(
     assert KEY not in steps[0].model_dump_json()
 
 
+def test_the_case_file_marks_a_manual_action_before_it_runs(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An approver must see "a human does this" before signing off, not after."""
+    from nightjar.api.repository import CaseFile
+    from nightjar.api.routers.incidents import _case_response
+
+    service, repo = build_service(monkeypatch, passed=True)
+    case = CaseFile(
+        incident=repo.incident,
+        actions=repo.actions,
+        action_states=repo.states,
+    )
+
+    response = _case_response(
+        case,
+        service=service,
+        evidence_valid=True,
+        timeline_valid=True,
+        checked_evidence=0,
+        checked_timeline=0,
+    )
+
+    assert response.actions[0].manual is True
+    assert response.manual_steps == []
+
+
 def test_the_manual_step_api_lists_the_step_and_attests_it(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

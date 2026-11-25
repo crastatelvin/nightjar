@@ -135,6 +135,11 @@ export function PlanPanel({ caseFile }: { caseFile: CaseFile }) {
                       {titleCase(action.action_type)}
                     </p>
                     <RiskChip risk={action.risk} />
+                    {action.manual && (
+                      <span className="inline-flex items-center gap-1 rounded-full border border-[rgba(255,196,107,0.3)] bg-[rgba(255,196,107,0.06)] px-2 py-0.5 text-[10px] font-medium text-[var(--color-amber)]">
+                        <IconShield className="h-2.5 w-2.5" /> manual step
+                      </span>
+                    )}
                     <span
                       className={cn(
                         "rounded-full border px-2 py-0.5 text-[10px] font-medium",
