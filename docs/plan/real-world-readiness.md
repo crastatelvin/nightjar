@@ -1372,17 +1372,23 @@ credential predicate, the idempotency table, and the manual-step UI at once.
 
 Nightjar 0.1 ships only when every line is checked and linked to evidence.
 
-- [ ] `nightjarctl doctor` exits 0 for all three incident classes
-- [ ] Three recorded incidents (outage, credential, phishing) with green chains
-- [ ] `nightjar-eval --suite all` 46/46 on mock **and** a recorded hosted baseline
-- [ ] `unavailable_action_rate == 0`
-- [ ] `credential_exposure` cannot resolve without a credential-bearing predicate
-- [ ] Production settings validator rejects unsafe configuration
-- [ ] Two API replicas run without double execution
-- [ ] OIDC enforced; shared token only with explicit opt-in
-- [ ] Backup restore + chain verification green in CI
-- [ ] Compose stack filed and resolved an incident in CI
+- [x] `nightjarctl doctor` exits 0 for all three incident classes
+  — `tests/test_doctor.py`
+- [x] Three recorded incidents (outage, credential, phishing) with green chains
+  — `tests/test_scenarios.py` files each class against the lab and checks both chains
+- [x] `nightjar-eval --suite all` 46/46 on mock — the CI `evals` job runs every gate
+- [ ] … and a recorded hosted baseline (needs provider API keys; `--record` is wired)
+- [x] `unavailable_action_rate == 0` — eval gate, including the new baseline
+- [x] `credential_exposure` cannot resolve without a credential-bearing predicate
+  — `tests/test_actions.py::test_credential_exposure_requires_a_predicate_about_the_credential`
+- [x] Production settings validator rejects unsafe configuration — `tests/test_settings.py`
+- [x] Two API replicas run without double execution
+  — `tests/test_locks.py::test_only_one_replica_leads_the_scheduler`
+- [x] OIDC enforced; shared token only with explicit opt-in — `tests/test_auth.py`
+- [x] Backup restore + chain verification green in CI — the CI `backup` job
+- [x] Compose stack filed and resolved an incident in CI — the CI `compose` job
 - [ ] Nightly live-connector suite green for every provider with secrets
+  (needs sandbox tenants)
 - [ ] Runbooks reviewed by someone who did not write them
 - [x] README "what is real" table generated from `/v1/meta/capabilities`, not prose
   — `nightjarctl capabilities --check README.md` runs in `pytest`

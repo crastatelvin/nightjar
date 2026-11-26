@@ -198,13 +198,16 @@ missing folder is a failed predicate, not a side effect. Every check converts a
 connector error into a verification failure, so a provider outage is a failed
 proof rather than a crashed verifier.
 
-Each connector declares `capabilities()` — the actions it can really perform and
-the kinds of target they need — and implements `preflight()`, which answers "can
-you do your job right now?" with a verdict, an identity, and the scopes that are
-missing. `core/capabilities.py` turns those answers into a report: which actions
-have a healthy provider, which are missing, and therefore whether each v1
-incident class can actually be closed. `nightjarctl doctor` and
-`GET /v1/meta/capabilities` expose the same report.
+Each connector declares `capabilities()` — the actions it can really perform, the
+kinds of target they need, and the read-back that decides whether the action
+worked — and implements `preflight()`, which answers "can you do your job right
+now?" with a verdict, an identity, and the scopes that are missing.
+`core/capabilities.py` turns those answers into a report: which actions have a
+healthy provider, which are missing, and therefore whether each v1 incident
+class can actually be closed. `nightjarctl doctor` and
+`GET /v1/meta/capabilities` expose the same report, and
+`nightjarctl capabilities` renders the README table from the same objects so the
+page cannot claim an action or a proof the code does not have.
 
 The lab connector never advertises an action that a configured real connector
 already implements, so a plan cannot name `connector: "lab"` to get a synthetic
@@ -298,6 +301,9 @@ the in-process lock for single-process development.
 `nightjarctl doctor` probes every configured provider, prints the capability
 table, and exits non-zero when a v1 incident class has no healthy provider.
 `--json` is for CI, `--deep` also sends one signed webhook ping.
+`nightjarctl capabilities --all` prints the supported catalogue and its proofs,
+`--check README.md` is the drift guard used by `pytest`, and `--write` updates
+the page.
 
 ### Worker (`src/nightjar/worker`)
 
