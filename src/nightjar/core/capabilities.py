@@ -38,6 +38,7 @@ class ActionCapability:
     target_kinds: tuple[str, ...]
     notes: str
     verdict: str
+    proof: str = ""
 
     def as_dict(self) -> dict[str, object]:
         return {
@@ -47,6 +48,7 @@ class ActionCapability:
             "target_kinds": list(self.target_kinds),
             "notes": self.notes,
             "verdict": self.verdict,
+            "proof": self.proof,
         }
 
 
@@ -139,6 +141,7 @@ def assess(
                     target_kinds=capability.target_kinds,
                     notes=capability.notes,
                     verdict=verdict,
+                    proof=capability.proof,
                 )
             )
 
@@ -180,6 +183,7 @@ def available_actions(connectors: list[Connector]) -> list[ActionCapability]:
                     target_kinds=capability.target_kinds,
                     notes=capability.notes,
                     verdict="configured",
+                    proof=capability.proof,
                 )
             )
     return catalogue

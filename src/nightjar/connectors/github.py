@@ -202,6 +202,7 @@ class GitHubConnector:
                 provider=self.name,
                 target_kinds=("credential",),
                 notes="unauthenticated revocation API; GHES unsupported in v1",
+                proof="token presented to `GET /user`; `401` is the only proof",
             )
         ]
         if self._token:
@@ -210,6 +211,7 @@ class GitHubConnector:
                     action_type=ActionType.OPEN_ISSUE,
                     provider=self.name,
                     target_kinds=("repository",),
+                    proof="issue URL returned by the API",
                 )
             )
         return tuple(capabilities)

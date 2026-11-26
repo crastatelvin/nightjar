@@ -88,6 +88,7 @@ async def capabilities(
                 automated=action.automated,
                 target_kinds=list(action.target_kinds),
                 notes=action.notes,
+                proof=action.proof,
                 verdict=action.verdict,
             )
             for action in report.actions

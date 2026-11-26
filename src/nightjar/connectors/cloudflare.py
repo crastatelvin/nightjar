@@ -313,18 +313,21 @@ class CloudflareConnector:
                 provider=self.name,
                 target_kinds=("zone", "url"),
                 notes="purge by URL or everything",
+                proof="cache status read back from the zone",
             ),
             Capability(
                 action_type=ActionType.ENABLE_UNDER_ATTACK,
                 provider=self.name,
                 target_kinds=("zone",),
                 notes="security level under_attack; customer-facing, needs approval",
+                proof="security level read back from the zone",
             ),
             Capability(
                 action_type=ActionType.ROLLBACK_DEPLOYMENT,
                 provider=self.name,
                 target_kinds=("project",),
                 notes="Cloudflare Pages rollback to a successful production deployment",
+                proof="Pages production deployment read back",
             ),
         )
 

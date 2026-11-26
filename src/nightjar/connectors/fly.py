@@ -218,6 +218,7 @@ class FlyConnector:
                 provider=self.name,
                 target_kinds=("app", "machine"),
                 notes="restart one machine; state and updated_at are read back",
+                proof="machine state and update time",
             ),
         )
 

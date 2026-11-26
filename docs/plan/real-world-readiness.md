@@ -1384,7 +1384,8 @@ Nightjar 0.1 ships only when every line is checked and linked to evidence.
 - [ ] Compose stack filed and resolved an incident in CI
 - [ ] Nightly live-connector suite green for every provider with secrets
 - [ ] Runbooks reviewed by someone who did not write them
-- [ ] README "what is real" table generated from `/v1/meta/capabilities`, not prose
+- [x] README "what is real" table generated from `/v1/meta/capabilities`, not prose
+  — `nightjarctl capabilities --check README.md` runs in `pytest`
 
 ---
 

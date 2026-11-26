@@ -136,7 +136,9 @@ reported as `configured`, not `ok`.
   ],
   "actions": [
     {"action_type": "revoke_credential", "provider": "github", "automated": true,
-     "target_kinds": ["credential"], "notes": "…", "verdict": "ok"}
+     "target_kinds": ["credential"], "notes": "…",
+     "proof": "token presented to `GET /user`; `401` is the only proof",
+     "verdict": "ok"}
   ],
   "missing": ["quarantine_message", "block_sender"],
   "problems": ["no healthy provider for quarantine_message"]
@@ -144,8 +146,10 @@ reported as `configured`, not `ok`.
 ```
 
 `ok` is false when any provider fails its preflight or any action required by a v1
-incident class has no healthy provider. `nightjarctl doctor` prints the same
-report and exits with the same verdict.
+incident class has no healthy provider. Each action also carries `proof`, the
+read-back the verifier requires before the action counts; the README table is
+rendered from these fields by `nightjarctl capabilities --all --markdown`.
+`nightjarctl doctor` prints the same report and exits with the same verdict.
 
 ## Alert intake
 

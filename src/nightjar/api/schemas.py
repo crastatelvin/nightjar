@@ -167,6 +167,7 @@ class ActionCapabilityView(BaseModel):
     automated: bool
     target_kinds: list[str] = Field(default_factory=list)
     notes: str = ""
+    proof: str = ""
     verdict: str
 
 

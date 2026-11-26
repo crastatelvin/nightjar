@@ -21,6 +21,10 @@ class Capability:
     ``automated=False`` means the provider has no API for this and the action is
     a manual step with a machine-checkable predicate. The planner is only ever
     offered capabilities that exist, so it cannot invent a fix.
+
+    ``proof`` is the read-back that decides whether the action worked. It is not
+    marketing copy: the verifier implements it, and the README renders it from
+    here so the two cannot drift.
     """
 
     action_type: ActionType
@@ -28,6 +32,7 @@ class Capability:
     automated: bool = True
     target_kinds: tuple[str, ...] = ()
     notes: str = ""
+    proof: str = ""
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -36,6 +41,7 @@ class Capability:
             "automated": self.automated,
             "target_kinds": list(self.target_kinds),
             "notes": self.notes,
+            "proof": self.proof,
         }
 
 

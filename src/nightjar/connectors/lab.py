@@ -214,6 +214,7 @@ class LabConnector:
                 provider=self.name,
                 target_kinds=_LAB_TARGETS[action],
                 notes="synthetic CornerShop; not a production provider",
+                proof="CornerShop state and audit read back",
             )
             for action in sorted(self.action_types, key=lambda item: item.value)
         )

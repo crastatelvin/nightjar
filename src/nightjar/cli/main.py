@@ -1,9 +1,10 @@
 """``nightjarctl`` — the operator's command line.
 
-Two commands, both of which answer a question an operator has before or after an
+Three commands, all of which answer a question an operator has before or after an
 incident rather than during one: ``doctor`` asks whether the deployment can
-actually close each v1 incident class, and ``verify-ledger`` asks whether the
-stored evidence still adds up.
+actually close each v1 incident class, ``capabilities`` renders what it can do and
+how it proves it, and ``verify-ledger`` asks whether the stored evidence still
+adds up.
 """
 
 from __future__ import annotations
@@ -12,7 +13,7 @@ import argparse
 from collections.abc import Sequence
 
 from nightjar import __version__
-from nightjar.cli import doctor, ledger
+from nightjar.cli import capabilities, doctor, ledger
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -23,6 +24,7 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--version", action="version", version=f"nightjar {__version__}")
     sub = parser.add_subparsers(dest="command", required=True)
     doctor.add_parser(sub)
+    capabilities.add_parser(sub)
     ledger.add_parser(sub)
     return parser
 

@@ -282,12 +282,14 @@ class RenderConnector:
                 provider=self.name,
                 target_kinds=("service",),
                 notes="rollback to a live deploy; autodeploy paused by default",
+                proof="deploy state and autodeploy flag",
             ),
             Capability(
                 action_type=ActionType.RESTART_SERVICE,
                 provider=self.name,
                 target_kinds=("service",),
                 notes="zero-downtime deploy of the same commit",
+                proof="deploy state and autodeploy flag",
             ),
         )
 

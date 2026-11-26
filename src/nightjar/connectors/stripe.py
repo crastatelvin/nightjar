@@ -104,6 +104,7 @@ class StripeConnector:
                     "Dashboard-only; Nightjar surfaces the step and proves the key is dead "
                     "with a 401 probe"
                 ),
+                proof="key presented as Basic auth; `401` proves dead, `403` proves still live",
             ),
         )
 

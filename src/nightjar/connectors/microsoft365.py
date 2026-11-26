@@ -510,12 +510,14 @@ class Microsoft365Connector:
                     "Graph move into the Nightjar Quarantine folder; the move creates a "
                     "new message id, which the action returns"
                 ),
+                proof="folder move read back; a new message id is accepted",
             ),
             Capability(
                 action_type=ActionType.BLOCK_SENDER,
                 provider=self.name,
                 target_kinds=("mailbox", "sender"),
                 notes="inbox message rule; read back from messageRules before resolution",
+                proof="inbox rule read back from `messageRules`",
             ),
             Capability(
                 action_type=ActionType.REVOKE_CREDENTIAL,
@@ -525,6 +527,7 @@ class Microsoft365Connector:
                     "revokeSignInSessions; proof reads signInActivity and needs "
                     "AuditLog.Read.All and Entra ID P1. Not account disable."
                 ),
+                proof="`signInActivity` read back; the API's `true` is not proof",
             ),
         )
 

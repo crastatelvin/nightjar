@@ -149,77 +149,87 @@ class ConnectorRegistry:
         return await connector.collect(tool, params)
 
 
-def build_registry(settings: Settings) -> ConnectorRegistry:
+def build_registry(settings: Settings, *, include_unconfigured: bool = False) -> ConnectorRegistry:
+    """Build the registry for a deployment.
+
+    ``include_unconfigured`` exists for documentation and for tests that need to
+    see the whole supported surface. It instantiates every connector with a
+    placeholder credential instead of skipping the ones this deployment has not
+    configured. Nothing is called, so the placeholder never reaches a provider;
+    the only purpose is to ask each connector what it can do and what proof it
+    produces.
+    """
+    placeholder = "catalogue"
     real: list[Connector] = [HttpConnector(allow_private=settings.allow_private_probes)]
-    if settings.github_token or settings.github_credential_revocation:
+    if include_unconfigured or settings.github_token or settings.github_credential_revocation:
         real.append(
             GitHubConnector(
-                settings.github_token,
+                settings.github_token or (placeholder if include_unconfigured else None),
                 base_url=settings.github_api_url,
                 vault=EnvVault(),
             )
         )
-    if settings.cloudflare_token:
+    if include_unconfigured or settings.cloudflare_token:
         real.append(
             CloudflareConnector(
-                settings.cloudflare_token,
+                settings.cloudflare_token or placeholder,
                 base_url=settings.cloudflare_api_url,
                 account_id=settings.cloudflare_account_id,
                 pages_project=settings.cloudflare_pages_project,
             )
         )
-    if settings.vercel_token:
+    if include_unconfigured or settings.vercel_token:
         real.append(
             VercelConnector(
-                settings.vercel_token,
+                settings.vercel_token or placeholder,
                 base_url=settings.vercel_api_url,
                 team_id=settings.vercel_team_id,
                 project=settings.vercel_project,
             )
         )
-    if settings.render_api_key:
+    if include_unconfigured or settings.render_api_key:
         real.append(
             RenderConnector(
-                settings.render_api_key,
+                settings.render_api_key or placeholder,
                 base_url=settings.render_api_url,
                 service_id=settings.render_service_id,
             )
         )
-    if settings.fly_api_token:
+    if include_unconfigured or settings.fly_api_token:
         real.append(
             FlyConnector(
-                settings.fly_api_token,
+                settings.fly_api_token or placeholder,
                 base_url=settings.fly_api_url,
                 app=settings.fly_app,
             )
         )
-    if settings.stripe_secret_key:
+    if include_unconfigured or settings.stripe_secret_key:
         real.append(
             StripeConnector(
                 settings.stripe_secret_key,
                 base_url=settings.stripe_api_url,
             )
         )
-    if settings.google_service_account_file:
+    if include_unconfigured or settings.google_service_account_file:
         real.append(
             GoogleWorkspaceConnector(
-                settings.google_service_account_file,
+                settings.google_service_account_file or f"{placeholder}.json",
                 mailboxes=tuple(settings.managed_targets.get("google", {}).get("mailboxes", [])),
                 api_url=settings.google_api_url,
                 oauth_url=settings.google_oauth_url,
                 quarantine_label=settings.google_quarantine_label,
             )
         )
-    if (
+    if include_unconfigured or (
         settings.microsoft_tenant_id
         and settings.microsoft_client_id
         and settings.microsoft_client_secret
     ):
         real.append(
             Microsoft365Connector(
-                settings.microsoft_tenant_id,
-                settings.microsoft_client_id,
-                settings.microsoft_client_secret,
+                settings.microsoft_tenant_id or placeholder,
+                settings.microsoft_client_id or placeholder,
+                settings.microsoft_client_secret or placeholder,
                 mailboxes=tuple(settings.managed_targets.get("microsoft", {}).get("mailboxes", [])),
                 graph_url=settings.microsoft_graph_url,
                 login_url=settings.microsoft_login_url,
@@ -227,15 +237,24 @@ def build_registry(settings: Settings) -> ConnectorRegistry:
                 propagation_seconds=settings.microsoft_propagation_seconds,
             )
         )
-    if settings.notify_webhook_url:
+    if include_unconfigured or settings.notify_webhook_url:
         real.append(
-            WebhookConnector(settings.notify_webhook_url, secret=settings.notify_webhook_secret)
+            WebhookConnector(
+                settings.notify_webhook_url or "https://example.invalid/nightjar",
+                secret=settings.notify_webhook_secret,
+            )
         )
 
     connectors: list[Connector] = list(real)
-    if settings.lab_enabled:
+    if settings.lab_enabled or include_unconfigured:
         # The lab stands in only for actions no real connector implements. A
-        # synthetic "credential revoked" must never shadow the real thing.
-        claimed = {action for connector in real for action in connector.action_types}
+        # synthetic "credential revoked" must never shadow the real thing. The
+        # documentation catalogue is the exception: there the lab is shown as a
+        # provider in its own right, because that is what it is in the studio.
+        claimed = (
+            set()
+            if include_unconfigured
+            else {action for connector in real for action in connector.action_types}
+        )
         connectors.insert(0, LabConnector(settings.lab_base_url, exclude_actions=claimed))
     return ConnectorRegistry(connectors)

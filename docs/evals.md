@@ -175,7 +175,7 @@ exist as well. Reports are uploaded per provider as `nightjar-eval-<provider>`.
 ## Current result
 
 `nightjar-eval --suite all` on the deterministic `mock` / `rules-v1` baseline
-(2026-11-24, Nightjar 0.1.0):
+(2026-11-25, Nightjar 0.1.0):
 
 | Metric | Result |
 | --- | --- |

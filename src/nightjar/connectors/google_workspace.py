@@ -404,12 +404,14 @@ class GoogleWorkspaceConnector:
                 provider=self.name,
                 target_kinds=("mailbox", "message"),
                 notes="Gmail label plus INBOX removal; one message per action",
+                proof="label applied and INBOX/UNREAD removed",
             ),
             Capability(
                 action_type=ActionType.BLOCK_SENDER,
                 provider=self.name,
                 target_kinds=("mailbox", "sender"),
                 notes="Gmail filter; mailbox comes from the action or the single managed mailbox",
+                proof="per-mailbox filter read back",
             ),
         )
 

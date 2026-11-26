@@ -86,7 +86,9 @@ OK: every v1 incident class can be closed and verified.
 `doctor` exits non-zero and names each missing action when a class has no healthy
 provider, so a pre-deployment check can fail on it. `--json` is for machines, `--deep`
 also sends one signed ping to the notification webhook. The same data is at
-`GET /v1/meta/capabilities`.
+`GET /v1/meta/capabilities`. `nightjarctl capabilities --all` renders the supported
+catalogue with each action's proof, and `--check README.md` is the CI guard that keeps
+the table below honest.
 
 The quickstart uses a 30-second stability window so the loop resolves while you watch.
 Production defaults to 900 seconds, because "it came back" is a claim about time.
@@ -178,19 +180,44 @@ or OIDC issuer, no managed targets, or a stability window under 60 seconds.
 
 ## Connectors
 
-| Provider | Actions | Read-back that counts |
-| --- | --- | --- |
-| **Cloudflare** | purge cache, enable under-attack, roll back Pages | cache status, under-attack state, Pages production deployment |
-| **Vercel** | roll back deployment | deployment state and alias |
-| **Render** | roll back, restart | deploy state and autodeploy flag |
-| **Fly.io** | restart machine | machine state and update time |
-| **GitHub** | create issue, revoke token | token presented to `GET /user`; revocation requires `401`, not `202` |
-| **Stripe** | assisted key revocation (manual) | key presented as Basic auth; `401` proves dead, `403` proves still live |
-| **Google Workspace** | quarantine message, block sender | label applied and INBOX/UNREAD removed; per-mailbox filter read back |
-| **Microsoft 365** | quarantine message, block sender, revoke sessions | folder move (new message id accepted), inbox rule read back, `signInActivity` — never the API's `true` |
-| **HTTP** | read-only probes | SSRF-guarded status, body, JSON path, latency |
-| **Webhook** | notify | signed delivery, optional deep ping from `doctor` |
-| **Lab** | every v1 action | the CornerShop synthetic environment used by the studio and evals |
+The table is generated from the same capabilities the planner is offered and
+`/v1/meta/capabilities` returns; `nightjarctl capabilities --all` renders it, and
+CI fails when the page drifts from the code. `manual` means the provider has no
+API for the action: Nightjar shows the operator the exact step and still requires
+machine-checked proof before resolving. The HTTP connector performs no actions;
+it supplies SSRF-guarded read probes (status, body, JSON path, latency) used by
+verification.
+
+<!-- capabilities:begin -->
+
+| Provider | Action | Execution | Read-back that counts |
+| --- | --- | --- | --- |
+| **Cloudflare** | enable under-attack | API | security level read back from the zone |
+| **Cloudflare** | purge cache | API | cache status read back from the zone |
+| **Cloudflare** | roll back deployment | API | Pages production deployment read back |
+| **Fly.io** | restart service | API | machine state and update time |
+| **GitHub** | open issue | API | issue URL returned by the API |
+| **GitHub** | revoke token | API | token presented to `GET /user`; `401` is the only proof |
+| **Google Workspace** | block sender | API | per-mailbox filter read back |
+| **Google Workspace** | quarantine message | API | label applied and INBOX/UNREAD removed |
+| **Lab** | block sender | API | CornerShop state and audit read back |
+| **Lab** | enable under-attack | API | CornerShop state and audit read back |
+| **Lab** | probe | API | CornerShop state and audit read back |
+| **Lab** | purge cache | API | CornerShop state and audit read back |
+| **Lab** | quarantine message | API | CornerShop state and audit read back |
+| **Lab** | restart service | API | CornerShop state and audit read back |
+| **Lab** | revoke token | API | CornerShop state and audit read back |
+| **Lab** | roll back deployment | API | CornerShop state and audit read back |
+| **Microsoft 365** | block sender | API | inbox rule read back from `messageRules` |
+| **Microsoft 365** | quarantine message | API | folder move read back; a new message id is accepted |
+| **Microsoft 365** | revoke token | API | `signInActivity` read back; the API's `true` is not proof |
+| **Render** | restart service | API | deploy state and autodeploy flag |
+| **Render** | roll back deployment | API | deploy state and autodeploy flag |
+| **Stripe** | revoke token | manual | key presented as Basic auth; `401` proves dead, `403` proves still live |
+| **Vercel** | roll back deployment | API | deployment state and alias |
+| **Webhook** | notify | API | receiver acknowledgement; `doctor --deep` sends a signed ping |
+
+<!-- capabilities:end -->
 
 Provider credentials are vault references, not literals in plans. Connector calls have
 per-provider budgets, retries honour `Retry-After`, and an outcome that may or may not

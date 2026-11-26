@@ -259,6 +259,7 @@ class VercelConnector:
                 provider=self.name,
                 target_kinds=("project",),
                 notes="instant rollback to a READY production deployment; alias checked",
+                proof="deployment state and alias",
             ),
         )
 

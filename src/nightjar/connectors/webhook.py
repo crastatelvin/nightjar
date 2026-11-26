@@ -78,6 +78,7 @@ class WebhookConnector:
                 provider=self.name,
                 target_kinds=("channel",),
                 notes="outbound only; destination is configuration",
+                proof="receiver acknowledgement; `doctor --deep` sends a signed ping",
             ),
         )
 
