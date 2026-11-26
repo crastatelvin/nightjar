@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="apps/web/app/icon.svg" width="72" height="72" alt="Nightjar" />
+  <img src="docs/assets/logo.svg" width="144" height="144" alt="Nightjar logo: a nightjar in flight inside a hexagonal shield, over a verification check" />
 </p>
 
 <h1 align="center">Nightjar</h1>
