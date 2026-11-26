@@ -35,6 +35,7 @@ def test_capabilities_probe_reports_a_working_lab(client: TestClient) -> None:
     assert {item["provider"] for item in payload["providers"]} == {"lab", "http"}
     actions = {item["action_type"]: item for item in payload["actions"]}
     assert actions["purge_cache"]["verdict"] == "ok"
+    assert actions["purge_cache"]["proof"] == "CornerShop state and audit read back"
     assert actions["quarantine_message"]["provider"] == "lab"
     assert actions["revoke_credential"]["automated"] is True
     assert payload["missing"] == []
