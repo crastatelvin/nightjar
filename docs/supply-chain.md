@@ -121,6 +121,20 @@ not mean going stale. `sha_pinning_required` is enabled on the repository, which
 GitHub refuse a workflow that introduces a tag reference; CodeQL's
 `actions/unpinned-tag` query is the review-time version of the same check.
 
+## Repository settings
+
+The project relies on settings that live in the repository, not in a file, so a fork
+or a mirror has to enable them again. All of them are free on a public repository:
+
+| Setting | Why |
+|---|---|
+| Secret scanning and push protection | A provider token in a commit is blocked before it reaches the branch, instead of being revoked after the fact. |
+| Private vulnerability reporting | `SECURITY.md` and the issue chooser point at the private advisory form; without it, both are dead ends. |
+| Dependabot alerts and security updates | Alerts are the finding; security updates are the fix. `.github/dependabot.yml` sets the schedule and the base-image majors it ignores. |
+| `sha_pinning_required` | Rejects a workflow that adds `uses: owner/action@v7`. |
+| Branch protection on `main` | The twelve CI checks are required, force pushes and branch deletion are refused, and administrators may bypass so one maintainer can still land a hotfix at 3 a.m. |
+| Discussions | The issue chooser links to it for design questions, so issues stay for reproducible bugs. |
+
 ## Runtime lines
 
 The container images run the same Python and Node versions the repository tests:
