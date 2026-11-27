@@ -12,14 +12,33 @@
 <p align="center">
   <a href="https://github.com/crastatelvin/nightjar/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/crastatelvin/nightjar/ci.yml?branch=main&style=flat-square&label=ci" /></a>
   <a href="LICENSE"><img alt="Apache-2.0" src="https://img.shields.io/badge/license-Apache--2.0-7cc4ff?style=flat-square" /></a>
-  <img alt="Python 3.14" src="https://img.shields.io/badge/python-3.14-7cc4ff?style=flat-square" />
+  <img alt="Python 3.14" src="https://img.shields.io/badge/python-3.14-7cc4ff?style=flat-square&logo=python&logoColor=05070c" />
   <img alt="pre-alpha" src="https://img.shields.io/badge/status-pre--alpha-c8ff72?style=flat-square" />
+  <img alt="self-hosted" src="https://img.shields.io/badge/deploy-self--hosted-6ef0c2?style=flat-square" />
+  <a href="CONTRIBUTING.md"><img alt="PRs welcome" src="https://img.shields.io/badge/PRs-welcome-6ef0c2?style=flat-square" /></a>
 </p>
 
 <p align="center">
-  <a href="docs/assets/demo.webm">
-    <img src="docs/assets/demo-poster.webp" alt="Watch the two-minute walkthrough" width="100%" />
+  <img alt="FastAPI" src="https://img.shields.io/badge/FastAPI-009688?style=flat-square&logo=fastapi&logoColor=white" />
+  <img alt="PydanticAI" src="https://img.shields.io/badge/PydanticAI-e92063?style=flat-square&logo=pydantic&logoColor=white" />
+  <img alt="PostgreSQL 18" src="https://img.shields.io/badge/PostgreSQL_18-4169e1?style=flat-square&logo=postgresql&logoColor=white" />
+  <img alt="Next.js 16" src="https://img.shields.io/badge/Next.js_16-000000?style=flat-square&logo=nextdotjs&logoColor=white" />
+  <img alt="React 19" src="https://img.shields.io/badge/React_19-61dafb?style=flat-square&logo=react&logoColor=05070c" />
+  <img alt="Tailwind 4" src="https://img.shields.io/badge/Tailwind_4-06b6d4?style=flat-square&logo=tailwindcss&logoColor=white" />
+  <img alt="Temporal" src="https://img.shields.io/badge/Temporal-000000?style=flat-square&logo=temporal&logoColor=white" />
+  <img alt="Open Policy Agent" src="https://img.shields.io/badge/OPA-7d9199?style=flat-square&logo=openpolicyagent&logoColor=white" />
+  <img alt="OpenTelemetry" src="https://img.shields.io/badge/OpenTelemetry-425cc7?style=flat-square&logo=opentelemetry&logoColor=white" />
+  <img alt="Docker" src="https://img.shields.io/badge/Docker-2496ed?style=flat-square&logo=docker&logoColor=white" />
+</p>
+
+<p align="center">
+  <a href="docs/assets/demo.mp4">
+    <img src="docs/assets/demo-preview.gif" alt="A nine-second loop: the command deck counts three proven fixes, a rollback waits for approval, and a phishing case closes with every predicate verified" width="100%" />
   </a>
+</p>
+
+<p align="center">
+  <sub><a href="docs/assets/demo.mp4">Watch the full two-minute walkthrough</a> — three incident classes, one loop, recorded against this build.</sub>
 </p>
 
 Nightjar is an incident responder for the long tail of operations: the shop whose
@@ -226,24 +245,22 @@ runs.
 
 ## Screenshots
 
-<details>
-<summary>Command deck, case file, verification, fault studio, settings</summary>
+Every picture is a capture of this build against the lab connector, not a mockup:
+`npm run screenshots` in `apps/web` files one incident per class, approves them, and
+photographs the pages an operator actually uses.
 
-| Command deck | Case file |
+| Command deck | Case file, waiting on a human |
 | --- | --- |
-| ![Command deck](docs/assets/dashboard.png) | ![Case file](docs/assets/case-file.png) |
+| ![Command deck](docs/assets/dashboard.png) | ![Case file with a pending decision](docs/assets/case-file.png) |
 
-| Verification | Fault studio |
+| Verification and the sealed ledger | Fault studio |
 | --- | --- |
-| ![Verification predicates](docs/assets/verification.png) | ![Fault studio](docs/assets/studio.png) |
+| ![Required predicates passed at T+0 and after the stability window](docs/assets/verification.png) | ![The CornerShop lab with a scenario selected](docs/assets/studio.png) |
 
-![Connection settings](docs/assets/settings.png)
+![Connection settings, with the control plane metadata it read back](docs/assets/settings.png)
 
-</details>
-
-The walkthrough above is a real run against the lab connector on this build, captured
-with `npm run demo:record` and encoded with `npm run demo:encode`. Nothing in it is
-staged.
+The walkthrough above is the same run, recorded with `npm run demo:record` and encoded
+with `npm run demo:encode`. Nothing in it is staged.
 
 ## Documentation
 
@@ -358,7 +375,7 @@ is one chain.
 
 **Pre-alpha.** The control plane, closed loop, connectors, evaluation suite, web UI,
 durable orchestration, backup/restore drill, signed images, and CI are working. The
-repository stays private until 0.1; the license and governance are already final.
+repository is public while 0.1 is finished; the license and governance are final.
 
 Real and exercised end to end:
 

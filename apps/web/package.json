@@ -10,7 +10,8 @@
     "test:e2e": "playwright test",
     "test:e2e:report": "playwright show-report",
     "demo:record": "node scripts/record-demo.mjs",
-    "demo:encode": "bash scripts/encode-demo.sh"
+    "demo:encode": "bash scripts/encode-demo.sh",
+    "screenshots": "node scripts/screenshots.mjs"
   },
   "dependencies": {
     "next": "16.4.6",

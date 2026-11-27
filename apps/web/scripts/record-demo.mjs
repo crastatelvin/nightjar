@@ -1,5 +1,5 @@
 /**
- * Record the three-class walkthrough that lives at `docs/assets/demo.webm`.
+ * Record the three-class walkthrough that lives at `docs/assets/demo.mp4`.
  *
  * This is a build script, not a test: it drives the real UI against a running lab,
  * control plane, and web app, and writes a video of what an operator sees. The test

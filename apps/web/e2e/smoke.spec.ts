@@ -47,7 +47,7 @@ test.describe("fault studio", () => {
     await expect(page.getByText("Break something.")).toBeVisible();
 
     for (const name of [
-      "Poisoned CDN cache",
+      "Poisoned edge cache",
       "Bad deployment",
       "Checkout dependency down",
       "Leaked API key",

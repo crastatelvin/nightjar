@@ -50,7 +50,7 @@ interface Scenario {
 const SCENARIOS: Scenario[] = [
   {
     id: "site_cache_poisoned",
-    name: "Poisoned CDN cache",
+    name: "Poisoned edge cache",
     eyebrow: "Storefront",
     description:
       "The edge is caching an error response for the whole storefront. Checkout looks down even though the origin is healthy.",
