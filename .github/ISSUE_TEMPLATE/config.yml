@@ -1,8 +1,8 @@
 blank_issues_enabled: false
 contact_links:
   - name: Security report
-    url: https://github.com/crastatelvin/nightjar/security/policy
-    about: Do not open a public issue for a vulnerability; follow SECURITY.md.
+    url: https://github.com/crastatelvin/nightjar/security/advisories/new
+    about: Report a vulnerability privately. Do not open a public issue; see SECURITY.md.
   - name: Question or design discussion
     url: https://github.com/crastatelvin/nightjar/discussions
     about: Ask about deployment, a provider, or a design trade-off.
