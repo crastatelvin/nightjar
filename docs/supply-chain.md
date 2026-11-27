@@ -109,6 +109,18 @@ the `github.event.repository.private == false` guard and the
 `NIGHTJAR_CODE_SCANNING` variable: a mirror or a private fork still skips cleanly
 instead of failing on a permission error.
 
+## Workflow dependencies
+
+Every `uses:` in `.github/workflows` names a commit SHA, with the release tag in a
+trailing comment (`actions/checkout@3d3c42e… # v7`). A tag is a mutable pointer: the
+action's owner, or anyone who compromises the owner's account, can repoint it at new
+code that runs with this repository's token. A SHA cannot move.
+
+Dependabot reads the comment and updates the SHA and the tag together, so pinning does
+not mean going stale. `sha_pinning_required` is enabled on the repository, which makes
+GitHub refuse a workflow that introduces a tag reference; CodeQL's
+`actions/unpinned-tag` query is the review-time version of the same check.
+
 ## Runtime lines
 
 The container images run the same Python and Node versions the repository tests:

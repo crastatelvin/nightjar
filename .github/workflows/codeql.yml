@@ -27,26 +27,25 @@ jobs:
     name: analyze ${{ matrix.language }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    # SARIF upload needs either a public repository or GitHub Advanced Security.
-    # Nightjar is private until 0.1, and a job that fails on a permissions error
-    # every push teaches people to ignore the check. The workflow starts gating the
-    # moment the repository is public; set the NIGHTJAR_CODE_SCANNING repository
-    # variable to "true" to opt in earlier on a GHAS-enabled private repository.
+    # SARIF upload needs a public repository or GitHub Advanced Security. Nightjar is
+    # public, so this gates every push and pull request. The guard stays for mirrors
+    # and private forks, which would otherwise fail on a permissions error; set the
+    # NIGHTJAR_CODE_SCANNING repository variable to "true" to gate there as well.
     if: github.event.repository.private == false || vars.NIGHTJAR_CODE_SCANNING == 'true'
     strategy:
       fail-fast: false
       matrix:
         language: [python, javascript-typescript]
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
-      - uses: github/codeql-action/init@v4
+      - uses: github/codeql-action/init@915412ff23e8b7659517e607487dbeae018f2934 # v4
         with:
-          language: ${{ matrix.language }}
+          languages: ${{ matrix.language }}
           # security-extended adds the checks that are still precise enough to gate
           # a merge; security-and-quality is too noisy for a repository this size.
           queries: security-extended
 
-      - uses: github/codeql-action/analyze@v4
+      - uses: github/codeql-action/analyze@915412ff23e8b7659517e607487dbeae018f2934 # v4
         with:
           category: /language:${{ matrix.language }}
