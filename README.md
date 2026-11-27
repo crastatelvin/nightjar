@@ -26,7 +26,7 @@
   <img alt="React 19" src="https://img.shields.io/badge/React_19-61dafb?style=flat-square&logo=react&logoColor=05070c" />
   <img alt="Tailwind 4" src="https://img.shields.io/badge/Tailwind_4-06b6d4?style=flat-square&logo=tailwindcss&logoColor=white" />
   <img alt="Temporal" src="https://img.shields.io/badge/Temporal-000000?style=flat-square&logo=temporal&logoColor=white" />
-  <img alt="Open Policy Agent" src="https://img.shields.io/badge/OPA-7d9199?style=flat-square&logo=openpolicyagent&logoColor=white" />
+  <img alt="Open Policy Agent" src="https://img.shields.io/badge/OPA-7d9199?style=flat-square" />
   <img alt="OpenTelemetry" src="https://img.shields.io/badge/OpenTelemetry-425cc7?style=flat-square&logo=opentelemetry&logoColor=white" />
   <img alt="Docker" src="https://img.shields.io/badge/Docker-2496ed?style=flat-square&logo=docker&logoColor=white" />
 </p>
