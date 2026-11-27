@@ -32,13 +32,13 @@
 </p>
 
 <p align="center">
-  <a href="docs/assets/demo.mp4">
+  <a href="https://github.com/crastatelvin/nightjar/raw/main/docs/assets/demo.mp4">
     <img src="docs/assets/demo-preview.gif" alt="A nine-second loop: the command deck counts three proven fixes, a rollback waits for approval, and a phishing case closes with every predicate verified" width="100%" />
   </a>
 </p>
 
 <p align="center">
-  <sub><a href="docs/assets/demo.mp4">Watch the full two-minute walkthrough</a> — three incident classes, one loop, recorded against this build.</sub>
+  <sub><a href="https://github.com/crastatelvin/nightjar/raw/main/docs/assets/demo.mp4">Download the full two-minute walkthrough</a> (2.3&nbsp;MB, H.264) — three incident classes, one loop, recorded against this build. GitHub does not play committed video inline, which is why the loop above is a GIF.</sub>
 </p>
 
 Nightjar is an incident responder for the long tail of operations: the shop whose
