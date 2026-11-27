@@ -12,8 +12,16 @@ release. There are no backports to older minor versions yet.
 
 ## Reporting a vulnerability
 
-Do not open a public issue. Email the maintainer at
-`crastatelvin@users.noreply.github.com` with:
+Do not open a public issue. Use GitHub's private advisory form:
+
+<https://github.com/crastatelvin/nightjar/security/advisories/new>
+
+That channel is visible only to the maintainer and gives us a private place to
+reproduce, fix, and agree a disclosure date with you. If you cannot use GitHub,
+open an issue titled "security report — need a private channel" with no details in
+it, and we will reply with an address.
+
+Include:
 
 - A description of the issue and its impact.
 - Steps to reproduce, including the exact version or commit.

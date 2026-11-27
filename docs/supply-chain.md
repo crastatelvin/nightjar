@@ -103,11 +103,11 @@ gate a merge; `security-and-quality` is noisy enough that a small team stops rea
 it.
 
 Publishing SARIF requires either a public repository or GitHub Advanced Security on a
-private one. Nightjar is private until 0.1, so the job skips rather than failing on a
-permission error while that is true; on a public repository it gates automatically.
-To turn it on earlier, enable code scanning in the repository settings and set the
-`NIGHTJAR_CODE_SCANNING` repository variable to `true`. Until then, `ruff`, `mypy`,
-and the test suite are the checks that run on every change.
+private one. Nightjar is public, so the job runs and gates every push and pull
+request. A fork's pull request cannot upload results, which is why the workflow keeps
+the `github.event.repository.private == false` guard and the
+`NIGHTJAR_CODE_SCANNING` variable: a mirror or a private fork still skips cleanly
+instead of failing on a permission error.
 
 ## Runtime lines
 

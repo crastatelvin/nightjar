@@ -1320,8 +1320,8 @@ while a human step is outstanding.
 | 10.1 ✅ | PyPI publish workflow (`nightjar-ir`, `nightjarctl`), trusted publishing, wheel install smoke (`release.yml`, CI `packaging` job, `docs/releasing.md`) | tagged release installs | 6 |
 | 10.2 ✅ | `CHANGELOG.md`, semver tags, one-version tests (`tests/test_versioning.py`) | 0.1.0 entry | 2 |
 | 10.3 ✅ | Signed images + SBOM + provenance (`images.yml`, `docs/supply-chain.md`) | cosign verify in docs | 6 |
-| 10.4 ✅ | CodeQL, Dependabot, `CODE_OF_CONDUCT`, issue templates (`codeql.yml`, `dependabot.yml`, `ISSUE_TEMPLATE/`) | enabled; CodeQL gates once the repository is public (SARIF upload needs GHAS on a private repo), documented in `docs/supply-chain.md` | 4 |
-| 10.5 ✅ | Docs pass and the three-class walkthrough (`docs/assets/demo.webm`, `apps/web/scripts/record-demo.mjs`, `encode-demo.sh`, README) | recorded against the lab build; every case resolves on proof | 12 |
+| 10.4 ✅ | CodeQL, Dependabot, `CODE_OF_CONDUCT`, issue templates (`codeql.yml`, `dependabot.yml`, `ISSUE_TEMPLATE/`) | enabled; CodeQL gates every push and pull request now that the repository is public, documented in `docs/supply-chain.md` | 4 |
+| 10.5 ✅ | Docs pass and the three-class walkthrough (`docs/assets/demo.mp4`, `demo-preview.gif`, `apps/web/scripts/record-demo.mjs`, `encode-demo.sh`, `screenshots.mjs`, README) | recorded against the lab build; every case resolves on proof; the README hero is a GIF loop and the stills are regenerated from the same stack | 12 |
 | 10.6 ✅ | Playwright: approval click, relapse, retry (`e2e/lifecycle.spec.ts`) | 3 new tests | 8 |
 | 10.7 ✅ | axe gate (`e2e/accessibility.spec.ts`, WCAG 2.1 AA, fails on critical/serious), self-hosted Inter/JetBrains Mono (`app/fonts/`), on-host request assertion (`e2e/typography.spec.ts`), and screenshot artifacts at desktop/phone width (`e2e/visual.spec.ts` + `nightjar-screenshots`). Pixel diffing is deliberately not gated: the background is an animated canvas and the type is dense sub-pixel, so a committed baseline would encode the rasterizer of the machine that made it | no critical violations; screenshots reviewed per run | 6 |
 

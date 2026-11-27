@@ -210,7 +210,7 @@ live-account validation, not reach.
 ### Phase 9 — Public launch
 
 - Publish 0.1 with a pinned changelog and upgrade note. (Artifacts are wired and
-  gated on the first `v*.*.*` tag; the repository stays private until then.)
+  gated on the first `v*.*.*` tag.)
 - ✅ Signed images, SBOM, PyPI workflow, CodeQL, Dependabot, code of conduct.
 - ✅ Docs pass, demo recording, accessibility gate and screenshot artifacts.
 - ✅ Opt-in OpenTelemetry export for operators who run a collector. There is no
