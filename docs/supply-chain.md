@@ -150,8 +150,8 @@ weekly schedule is the backstop: a query that lands while the repository is quie
 still runs against `main`.
 
 `strict` is off, so a pull request does not have to be rebased onto the latest `main`
-before it merges. With one maintainer and a suite that runs in twelve minutes, the
-extra rebase round trip costs more than the merge it prevents.
+before it merges. With one maintainer and a suite whose slowest job finishes in two
+minutes, the extra rebase round trip costs more than the merge it prevents.
 
 ## Runtime lines
 
