@@ -1395,6 +1395,38 @@ Nightjar 0.1 ships only when every line is checked and linked to evidence.
 
 ---
 
+## 17. Public repository
+
+The repository is public. These are the settings and gates that make that safe, each
+with the run that proves it is on rather than the run that says it should be.
+
+- [x] Secret scanning with push protection, private vulnerability reporting, Dependabot
+  alerts and security updates — `SECURITY.md` and the issue chooser point at the
+  advisory form, which only works when reporting is enabled
+- [x] Every workflow action pinned to a commit, `sha_pinning_required` on
+  — the first CodeQL run raised 20 `actions/unpinned-tag` alerts and 0 after the pin;
+  run 45954208222
+- [x] Branch protection on `main`: the nine `ci.yml` jobs plus `sign-off` required,
+  force pushes and deletions refused — validated by PR #12, which reported `BLOCKED`
+  while the checks ran and `CLEAN` before the rebase merge
+- [x] DCO gate — `dco.yml` passed on PR #12 and failed on a throwaway unsigned commit
+  in a scratch clone, so the check is not a light that never turns red
+- [x] Discussions enabled, blank issues disabled, the chooser sends security reports to
+  the advisory form
+- [x] README media is captured from this build: a GIF loop inline, the walkthrough as
+  H.264, five screenshots — `docs/assets/README.md` maps each file to its command
+
+Deliberately not done:
+
+- **Required approvals.** A single maintainer cannot approve their own pull request, so
+  a required review would make `main` unmergeable. The moment a second maintainer
+  exists, add one approval and `enforce_admins`.
+- **CodeQL as a required check.** It runs on every pull request and push, and its
+  alerts are public, but a check that depends on a SARIF upload can fail for reasons
+  outside the diff. The reasoning is in `docs/supply-chain.md`.
+
+---
+
 ## Appendix A — provider setup checklist
 
 | Provider | What to create | Where it goes |
