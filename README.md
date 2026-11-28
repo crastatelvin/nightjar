@@ -14,7 +14,6 @@
   <a href="LICENSE"><img alt="Apache-2.0" src="https://img.shields.io/badge/license-Apache--2.0-7cc4ff?style=flat-square" /></a>
   <img alt="Python 3.14" src="https://img.shields.io/badge/python-3.14-7cc4ff?style=flat-square&logo=python&logoColor=05070c" />
   <img alt="pre-alpha" src="https://img.shields.io/badge/status-pre--alpha-c8ff72?style=flat-square" />
-  <img alt="self-hosted" src="https://img.shields.io/badge/deploy-self--hosted-6ef0c2?style=flat-square" />
   <a href="CONTRIBUTING.md"><img alt="PRs welcome" src="https://img.shields.io/badge/PRs-welcome-6ef0c2?style=flat-square" /></a>
 </p>
 
