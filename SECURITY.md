@@ -19,7 +19,7 @@ Do not open a public issue. Use GitHub's private advisory form:
 That channel is visible only to the maintainer and gives us a private place to
 reproduce, fix, and agree a disclosure date with you. If you cannot use GitHub,
 open an issue titled "security report — need a private channel" with no details in
-it, and we will reply with an address.
+it, and we will agree a private channel with you before you send anything sensitive.
 
 Include:
 
