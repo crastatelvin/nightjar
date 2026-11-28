@@ -132,8 +132,26 @@ or a mirror has to enable them again. All of them are free on a public repositor
 | Private vulnerability reporting | `SECURITY.md` and the issue chooser point at the private advisory form; without it, both are dead ends. |
 | Dependabot alerts and security updates | Alerts are the finding; security updates are the fix. `.github/dependabot.yml` sets the schedule and the base-image majors it ignores. |
 | `sha_pinning_required` | Rejects a workflow that adds `uses: owner/action@v7`. |
-| Branch protection on `main` | The twelve CI checks are required, force pushes and branch deletion are refused, and administrators may bypass so one maintainer can still land a hotfix at 3 a.m. |
+| Branch protection on `main` | The ten deterministic checks are required, force pushes and branch deletion are refused, and administrators may bypass so one maintainer can still land a hotfix at 3 a.m. |
 | Discussions | The issue chooser links to it for design questions, so issues stay for reproducible bugs. |
+
+The ten required checks are the jobs in `.github/workflows/ci.yml` — `lint, types,
+tests`, `packaging`, `policy parity`, `backup and restore`, `CornerShop evaluation`,
+`web typecheck and build`, `web smoke test`, `container build`, `compose smoke` — plus
+`sign-off` from `.github/workflows/dco.yml`. Every one of them is a local command with
+a fixed exit code.
+
+CodeQL is deliberately not in that list. It runs on every pull request and every push
+to `main`, and its alerts are public in the Security tab, but a required check that
+depends on uploading SARIF can fail for reasons that have nothing to do with the diff
+(a token that cannot write, a service hiccup), and a check that blocks a contributor
+for an infrastructure reason teaches them to ask for a bypass instead of a fix. The
+weekly schedule is the backstop: a query that lands while the repository is quiet
+still runs against `main`.
+
+`strict` is off, so a pull request does not have to be rebased onto the latest `main`
+before it merges. With one maintainer and a suite that runs in twelve minutes, the
+extra rebase round trip costs more than the merge it prevents.
 
 ## Runtime lines
 
