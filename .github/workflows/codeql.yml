@@ -11,6 +11,8 @@ on:
   workflow_dispatch:
 
 concurrency:
+  # Only the newest commit on a branch needs an analysis: code scanning reads the
+  # latest result per branch, so an older run in flight has nothing to add.
   group: codeql-${{ github.ref }}
   cancel-in-progress: true
 

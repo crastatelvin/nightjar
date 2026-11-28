@@ -7,8 +7,11 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  # A pull request's older runs are superseded by definition, so cancel them. A push
+  # to main is not: cancelling it leaves "cancelled" as the newest conclusion on the
+  # branch, and the README badge reads that as a failure. Main runs queue instead.
+  group: ci-${{ github.event_name == 'pull_request' && format('pr-{0}', github.head_ref) || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
